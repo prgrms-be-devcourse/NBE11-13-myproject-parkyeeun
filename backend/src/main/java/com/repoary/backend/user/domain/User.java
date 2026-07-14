@@ -17,6 +17,9 @@ public class User {
     @Column(name = "github_login", nullable = false, length = 100)
     private String githubLogin;
 
+    @Column(name = "github_access_token", columnDefinition = "TEXT")
+    private String githubAccessToken;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -29,6 +32,10 @@ public class User {
         this.createdAt = LocalDateTime.now();
     }
 
+    public void updateGitHubAccessToken(String githubAccessToken) {
+        this.githubAccessToken = githubAccessToken;
+    }
+
     public Long getId() {
         return id;
     }
@@ -39,6 +46,10 @@ public class User {
 
     public String getGithubLogin() {
         return githubLogin;
+    }
+
+    public String getGithubAccessToken() {
+        return githubAccessToken;
     }
 
     public LocalDateTime getCreatedAt() {

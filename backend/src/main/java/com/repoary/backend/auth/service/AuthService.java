@@ -39,9 +39,13 @@ public class AuthService {
         GitHubAccessTokenResponse tokenResponse = gitHubOAuthClient.requestAccessToken(request);
         GitHubUserResponse gitHubUser = gitHubOAuthClient.requestUserInfo(tokenResponse.accessToken());
 
-        return userRepository.findByGithubId(gitHubUser.id())
+        User user = userRepository.findByGithubId(gitHubUser.id())
                 .orElseGet(() -> userRepository.save(
                         new User(gitHubUser.id(), gitHubUser.login())
                 ));
+
+        user.updateGitHubAccessToken(tokenResponse.accessToken());
+
+        return user;
     }
 }
