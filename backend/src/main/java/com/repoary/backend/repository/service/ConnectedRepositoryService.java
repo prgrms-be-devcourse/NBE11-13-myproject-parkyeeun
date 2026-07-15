@@ -57,4 +57,14 @@ public class ConnectedRepositoryService {
                 .map(ConnectedRepositoryResponse::from)
                 .toList();
     }
+
+    @Transactional
+    public void disconnect(Long userId, Long githubRepositoryId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        connectedRepositoryRepository
+                .findByUserAndGithubRepositoryId(user, githubRepositoryId)
+                .ifPresent(connectedRepositoryRepository::delete);
+    }
 }

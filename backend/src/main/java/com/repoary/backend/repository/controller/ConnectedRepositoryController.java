@@ -3,6 +3,7 @@ package com.repoary.backend.repository.controller;
 import com.repoary.backend.repository.dto.ConnectRepositoryRequest;
 import com.repoary.backend.repository.dto.ConnectedRepositoryResponse;
 import com.repoary.backend.repository.service.ConnectedRepositoryService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,5 +34,17 @@ public class ConnectedRepositoryController {
         Long userId = (Long) authentication.getPrincipal();
 
         return connectedRepositoryService.getConnectedRepositories(userId);
+    }
+
+    @DeleteMapping("/connected/{githubRepositoryId}")
+    public ResponseEntity<Void> disconnect(
+            Authentication authentication,
+            @PathVariable Long githubRepositoryId
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+
+        connectedRepositoryService.disconnect(userId, githubRepositoryId);
+
+        return ResponseEntity.noContent().build();
     }
 }
