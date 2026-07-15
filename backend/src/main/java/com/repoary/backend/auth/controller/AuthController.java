@@ -1,28 +1,36 @@
 package com.repoary.backend.auth.controller;
 
+import com.repoary.backend.auth.config.FrontendProperties;
 import com.repoary.backend.auth.config.GitHubOAuthProperties;
-import com.repoary.backend.auth.dto.*;
+import com.repoary.backend.auth.dto.GitHubLoginUrlResponse;
 import com.repoary.backend.auth.jwt.JwtProvider;
 import com.repoary.backend.auth.service.AuthService;
 import com.repoary.backend.user.domain.User;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
+
 @RestController
 public class AuthController {
 
     private final GitHubOAuthProperties gitHubOAuthProperties;
+    private final FrontendProperties frontendProperties;
     private final AuthService authService;
     private final JwtProvider jwtProvider;
 
     public AuthController(
             GitHubOAuthProperties gitHubOAuthProperties,
+            FrontendProperties frontendProperties,
             AuthService authService,
             JwtProvider jwtProvider
     ) {
         this.gitHubOAuthProperties = gitHubOAuthProperties;
+        this.frontendProperties = frontendProperties;
         this.authService = authService;
         this.jwtProvider = jwtProvider;
     }
@@ -41,10 +49,19 @@ public class AuthController {
     }
 
     @GetMapping("/api/auth/github/callback")
-    public LoginResponse githubCallback(@RequestParam String code) {
+    public ResponseEntity<Void> githubCallback(@RequestParam String code) {
         User user = authService.loginWithGitHub(code);
         String accessToken = jwtProvider.createAccessToken(user);
 
-        return LoginResponse.of(user, accessToken);
+        URI redirectUri = UriComponentsBuilder
+                .fromUriString(frontendProperties.redirectUri())
+                .queryParam("token", accessToken)
+                .build()
+                .toUri();
+
+        return ResponseEntity
+                .status(302)
+                .header(HttpHeaders.LOCATION, redirectUri.toString())
+                .build();
     }
 }
