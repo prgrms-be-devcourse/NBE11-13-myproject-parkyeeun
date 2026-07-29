@@ -9,7 +9,15 @@ import java.util.Optional;
 
 public interface ConnectedRepositoryRepository extends JpaRepository<ConnectedRepository, Long> {
 
-    Optional<ConnectedRepository> findByUserAndGithubRepositoryId(User user, Long githubRepositoryId);
+    Optional<ConnectedRepository> findByUserAndGithubRepositoryId(
+            User user,
+            Long githubRepositoryId
+    );
+
+    Optional<ConnectedRepository> findByIdAndUser(
+            Long id,
+            User user
+    );
 
     List<ConnectedRepository> findAllByUserOrderByConnectedAtDesc(User user);
 }
