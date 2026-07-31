@@ -1,11 +1,14 @@
 package com.repoary.backend.github.client;
 
+import com.repoary.backend.github.dto.GitHubCommitDetailResponse;
+import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.dto.GitHubContentResponse;
 import com.repoary.backend.github.dto.GitHubRepositoryResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -60,6 +63,30 @@ public class GitHubApiClient {
                 .toList();
     }
 
+    public List<GitHubCommitResponse> getCommits(
+            String accessToken,
+            String owner,
+            String repositoryName,
+            String defaultBranch,
+            Instant since,
+            Instant until
+    ) {
+        List<GitHubCommitResponse> commits = restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repository}/commits")
+                        .queryParam("sha", defaultBranch)
+                        .queryParam("since", since.toString())
+                        .queryParam("until", until.toString())
+                        .queryParam("per_page", 100)
+                        .build(owner, repositoryName))
+                .headers(headers -> setGitHubHeaders(headers, accessToken))
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {
+                });
+
+        return commits == null ? List.of() : commits;
+    }
+
     private void setGitHubHeaders(
             org.springframework.http.HttpHeaders headers,
             String accessToken
@@ -67,5 +94,29 @@ public class GitHubApiClient {
         headers.setBearerAuth(accessToken);
         headers.set("Accept", "application/vnd.github+json");
         headers.set("X-GitHub-Api-Version", GITHUB_API_VERSION);
+    }
+
+    public GitHubCommitDetailResponse getCommitDetail(
+            String accessToken,
+            String owner,
+            String repositoryName,
+            String commitSha
+    ) {
+        GitHubCommitDetailResponse response = restClient.get()
+                .uri(
+                        "/repos/{owner}/{repository}/commits/{commitSha}",
+                        owner,
+                        repositoryName,
+                        commitSha
+                )
+                .headers(headers -> setGitHubHeaders(headers, accessToken))
+                .retrieve()
+                .body(GitHubCommitDetailResponse.class);
+
+        if (response == null) {
+            throw new IllegalStateException("GitHub 커밋 상세 응답이 없습니다.");
+        }
+
+        return response;
     }
 }
