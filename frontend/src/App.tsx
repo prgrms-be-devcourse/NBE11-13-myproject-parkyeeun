@@ -4,10 +4,27 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import RepositoryPage from "./pages/RepositoryPage";
 import RuleManagementPage from "./pages/RuleManagementPage";
+import AnalysisPage from "./pages/AnalysisPage";
 
 const getRuleRepositoryId = (pathname: string) => {
   const match = pathname.match(
     /^\/repositories\/(\d+)\/rules$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const repositoryId = Number(match[1]);
+
+  return Number.isInteger(repositoryId) && repositoryId > 0
+    ? repositoryId
+    : null;
+};
+
+const getAnalysisRepositoryId = (pathname: string) => {
+  const match = pathname.match(
+    /^\/repositories\/(\d+)\/analysis$/,
   );
 
   if (!match) {
@@ -43,6 +60,17 @@ function App() {
     return (
       <RuleManagementPage
         connectedRepositoryId={ruleRepositoryId}
+      />
+    );
+  }
+
+  const analysisRepositoryId =
+    getAnalysisRepositoryId(pathname);
+
+  if (analysisRepositoryId !== null) {
+    return (
+      <AnalysisPage
+        connectedRepositoryId={analysisRepositoryId}
       />
     );
   }
