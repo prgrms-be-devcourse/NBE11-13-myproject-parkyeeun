@@ -24,3 +24,10 @@ export type ConnectedRepository = {
   defaultBranch: string;
   connectedAt: string;
 };
+
+export type {
+  ClassificationRule,
+  ClassificationRuleRequest,
+  ConventionRule,
+  ConventionRuleRequest,
+} from "./rule";

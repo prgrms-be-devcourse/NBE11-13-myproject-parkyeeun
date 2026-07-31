@@ -4,33 +4,40 @@ import {
   disconnectRepository,
   fetchConnectedRepositories,
   fetchGitHubRepositories,
-  fetchMe,
-  removeAccessToken,
 } from "../api/client";
 import Layout from "../components/Layout";
-import type { ConnectedRepository, GitHubRepository, User } from "../types";
+import type {
+  ConnectedRepository,
+  GitHubRepository,
+} from "../types";
+
+const SELECTED_REPOSITORY_KEY =
+  "repoarySelectedConnectedRepositoryId";
 
 function RepositoryPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
-  const [connectedRepositories, setConnectedRepositories] = useState<
-    ConnectedRepository[]
+  const [repositories, setRepositories] = useState<
+    GitHubRepository[]
   >([]);
+  const [connectedRepositories, setConnectedRepositories] =
+    useState<ConnectedRepository[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingRepositoryId, setProcessingRepositoryId] =
+    useState<number | null>(null);
 
-  const handleLogout = () => {
-    removeAccessToken();
-    window.location.replace("/");
-  };
+  const handleConnectRepository = async (
+    repository: GitHubRepository,
+  ) => {
+    setProcessingRepositoryId(repository.id);
 
-  const handleConnectRepository = async (repository: GitHubRepository) => {
     try {
-      const connectedRepository = await connectRepository(repository);
+      const connectedRepository =
+        await connectRepository(repository);
 
       setConnectedRepositories((prev) => {
         const exists = prev.some(
           (item) =>
-            item.githubRepositoryId === connectedRepository.githubRepositoryId
+            item.githubRepositoryId ===
+            connectedRepository.githubRepositoryId,
         );
 
         if (exists) {
@@ -41,82 +48,108 @@ function RepositoryPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("저장소 연결 중 오류가 발생했습니다.");
+      window.alert("저장소 연결 중 오류가 발생했습니다.");
+    } finally {
+      setProcessingRepositoryId(null);
     }
   };
 
-  const handleDisconnectRepository = async (repository: GitHubRepository) => {
+  const handleDisconnectRepository = async (
+    repository: GitHubRepository,
+  ) => {
+    const confirmed = window.confirm(
+      `${repository.fullName} 저장소 연결을 해제하시겠습니까?\n\n연결을 해제하면 해당 저장소의 규칙과 분석 기능을 사용할 수 없습니다.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const disconnectedRepository =
+      connectedRepositories.find(
+        (connectedRepository) =>
+          connectedRepository.githubRepositoryId ===
+          repository.id,
+      );
+
+    setProcessingRepositoryId(repository.id);
+
     try {
       await disconnectRepository(repository.id);
 
       setConnectedRepositories((prev) =>
         prev.filter(
           (connectedRepository) =>
-            connectedRepository.githubRepositoryId !== repository.id
-        )
+            connectedRepository.githubRepositoryId !==
+            repository.id,
+        ),
       );
+
+      const selectedRepositoryId = localStorage.getItem(
+        SELECTED_REPOSITORY_KEY,
+      );
+
+      if (
+        disconnectedRepository &&
+        selectedRepositoryId ===
+          String(disconnectedRepository.id)
+      ) {
+        localStorage.removeItem(SELECTED_REPOSITORY_KEY);
+      }
     } catch (error) {
       console.error(error);
-      alert("저장소 연결 해제 중 오류가 발생했습니다.");
+      window.alert(
+        "저장소 연결 해제 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setProcessingRepositoryId(null);
     }
   };
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [me, githubRepositories, connected] = await Promise.all([
-          fetchMe(),
-          fetchGitHubRepositories(),
-          fetchConnectedRepositories(),
-        ]);
+        const [githubRepositories, connected] =
+          await Promise.all([
+            fetchGitHubRepositories(),
+            fetchConnectedRepositories(),
+          ]);
 
-        setUser(me);
         setRepositories(githubRepositories);
         setConnectedRepositories(connected);
       } catch (error) {
         console.error(error);
-        removeAccessToken();
-        window.location.replace("/");
+        window.alert(
+          "저장소 목록을 불러오는 중 오류가 발생했습니다.",
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    void loadData();
   }, []);
 
-  const isConnected = (repository: GitHubRepository) => {
-    return connectedRepositories.some(
+  const getConnectedRepository = (
+    repository: GitHubRepository,
+  ) => {
+    return connectedRepositories.find(
       (connectedRepository) =>
-        connectedRepository.githubRepositoryId === repository.id
+        connectedRepository.githubRepositoryId ===
+        repository.id,
     );
   };
 
   return (
     <Layout>
-      <div className="mt-8 flex items-center justify-between rounded-xl bg-green-50 px-5 py-3 text-sm text-green-700">
-        <p>
-          {user
-            ? `${user.githubLogin} 계정으로 로그인되었습니다.`
-            : "로그인 정보를 확인하는 중입니다."}
-        </p>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-        >
-          로그아웃
-        </button>
-      </div>
-
-      <div className="mt-8">
+      <div>
         <h2 className="text-xl font-semibold text-slate-900">
-          분석할 저장소 선택
+          저장소 관리
         </h2>
 
         <p className="mt-2 text-sm text-slate-500">
-          GitHub 저장소 중 Repoary에서 학습 기록을 분석할 저장소를 연결합니다.
+          GitHub 저장소 중 Repoary에서 학습 기록을 분석할
+          저장소를 연결합니다.
         </p>
       </div>
 
@@ -124,43 +157,81 @@ function RepositoryPage() {
         <p className="mt-6 text-sm text-slate-500">
           저장소 목록을 불러오는 중입니다.
         </p>
+      ) : repositories.length === 0 ? (
+        <p className="mt-6 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+          조회할 수 있는 GitHub 저장소가 없습니다.
+        </p>
       ) : (
         <ul className="mt-6 space-y-3">
-          {repositories.map((repository) => (
-            <li
-              key={repository.id}
-              className="flex items-center justify-between rounded-xl border border-slate-200 p-4"
-            >
-              <div>
-                <p className="font-medium text-slate-900">
-                  {repository.fullName}
-                </p>
+          {repositories.map((repository) => {
+            const connectedRepository =
+              getConnectedRepository(repository);
+            const processing =
+              processingRepositoryId === repository.id;
 
-                <p className="mt-1 text-sm text-slate-500">
-                  기본 브랜치: {repository.defaultBranch}
-                  {repository.privateRepository ? " · private" : " · public"}
-                </p>
-              </div>
+            return (
+              <li
+                key={repository.id}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 p-4"
+              >
+                <div className="min-w-0">
+                  <p className="break-all font-medium text-slate-900">
+                    {repository.fullName}
+                  </p>
 
-              {isConnected(repository) ? (
-                <button
-                  type="button"
-                  onClick={() => handleDisconnectRepository(repository)}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-                >
-                  연결 해제
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleConnectRepository(repository)}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                >
-                  연결
-                </button>
-              )}
-            </li>
-          ))}
+                  <p className="mt-1 text-sm text-slate-500">
+                    기본 브랜치: {repository.defaultBranch}
+                    {repository.privateRepository
+                      ? " · private"
+                      : " · public"}
+                  </p>
+                </div>
+
+                {connectedRepository ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.location.assign(
+                          `/repositories/${connectedRepository.id}/rules`,
+                        )
+                      }
+                      disabled={processing}
+                      className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      규칙 관리
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleDisconnectRepository(
+                          repository,
+                        )
+                      }
+                      disabled={processing}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {processing
+                        ? "해제 중..."
+                        : "연결 해제"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleConnectRepository(repository)
+                    }
+                    disabled={processing}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {processing ? "연결 중..." : "연결"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </Layout>
