@@ -182,16 +182,27 @@ function DashboardPage() {
 
             <button
               type="button"
-              disabled
-              className="rounded-xl border border-slate-200 p-5 text-left opacity-50"
+              disabled={!selectedRepository}
+              onClick={() => {
+                if (!selectedRepository) {
+                  return;
+                }
+
+                window.location.assign(
+                  `/repositories/${selectedRepository.id}/analysis`,
+                );
+              }}
+              className="rounded-xl border border-slate-200 p-5 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <p className="font-semibold text-slate-900">
                 커밋 분석
               </p>
 
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                날짜별 커밋 분석 화면은 다음 단계에서 연결합니다.
-              </p>
+                날짜별 커밋과 변경 파일의 분류 결과를 
+                <br />
+                확인합니다.
+                </p>
             </button>
           </section>
         </>
