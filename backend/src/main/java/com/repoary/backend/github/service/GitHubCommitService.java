@@ -69,6 +69,51 @@ public class GitHubCommitService {
     }
 
     @Transactional(readOnly = true)
+    public List<GitHubCommitResponse> getCommits(
+            Long userId,
+            Long connectedRepositoryId,
+            LocalDate from,
+            LocalDate to
+    ) {
+        if (from == null || to == null) {
+            throw new IllegalArgumentException(
+                    "분석 시작일과 종료일은 필수입니다."
+            );
+        }
+
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException(
+                    "분석 시작일은 종료일보다 늦을 수 없습니다."
+            );
+        }
+
+        RepositoryContext context = getRepositoryContext(
+                userId,
+                connectedRepositoryId
+        );
+
+        Instant since = from
+                .atTime(DAY_BOUNDARY)
+                .atZone(KST)
+                .toInstant();
+
+        Instant until = to
+                .plusDays(1)
+                .atTime(DAY_BOUNDARY)
+                .atZone(KST)
+                .toInstant();
+
+        return gitHubApiClient.getCommits(
+                context.user().getGithubAccessToken(),
+                context.owner(),
+                context.repositoryName(),
+                context.repository().getDefaultBranch(),
+                since,
+                until
+        );
+    }
+
+    @Transactional(readOnly = true)
     public GitHubCommitDetailResponse getCommitDetail(
             Long userId,
             Long connectedRepositoryId,
