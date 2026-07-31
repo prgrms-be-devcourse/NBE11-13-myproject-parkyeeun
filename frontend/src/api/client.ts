@@ -1,6 +1,6 @@
 import type { ConnectedRepository, GitHubRepository, User } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const getAccessToken = () => {
   return localStorage.getItem("repoaryAccessToken");
@@ -14,7 +14,7 @@ export const removeAccessToken = () => {
   localStorage.removeItem("repoaryAccessToken");
 };
 
-const authHeaders = () => {
+export const authHeaders = () => {
   const token = getAccessToken();
 
   return {

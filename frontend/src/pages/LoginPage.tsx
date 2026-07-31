@@ -17,7 +17,7 @@ function LoginPage() {
       <button
         type="button"
         onClick={handleGitHubLogin}
-        className="mt-8 rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white"
+        className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white"
       >
         GitHub로 시작하기
       </button>
