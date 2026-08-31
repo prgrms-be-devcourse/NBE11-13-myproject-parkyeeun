@@ -7,6 +7,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Entity
 @Table(
@@ -78,7 +79,7 @@ public class AnalysisJob {
         }
 
         this.status = AnalysisJobStatus.RUNNING;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = LocalDateTime.now(ZoneOffset.UTC);
         this.errorMessage = null;
     }
 
@@ -98,7 +99,7 @@ public class AnalysisJob {
         this.status = AnalysisJobStatus.COMPLETED;
         this.result = result;
         this.errorMessage = null;
-        this.completedAt = LocalDateTime.now();
+        this.completedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public void fail(String errorMessage) {
@@ -111,7 +112,7 @@ public class AnalysisJob {
         this.status = AnalysisJobStatus.FAILED;
         this.result = null;
         this.errorMessage = normalizeErrorMessage(errorMessage);
-        this.completedAt = LocalDateTime.now();
+        this.completedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     private String normalizeErrorMessage(String errorMessage) {
@@ -130,7 +131,7 @@ public class AnalysisJob {
 
     @PrePersist
     private void prePersist() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         this.createdAt = now;
         this.updatedAt = now;
@@ -142,7 +143,7 @@ public class AnalysisJob {
 
     @PreUpdate
     private void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public Long getId() {

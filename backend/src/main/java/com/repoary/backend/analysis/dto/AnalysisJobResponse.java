@@ -8,6 +8,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 @Schema(description = "커밋 분석 작업 응답")
 public record AnalysisJobResponse(
@@ -17,10 +19,10 @@ public record AnalysisJobResponse(
         AnalysisJobStatus status,
         JsonNode result,
         String errorMessage,
-        LocalDateTime startedAt,
-        LocalDateTime completedAt,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        OffsetDateTime startedAt,
+        OffsetDateTime completedAt,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
 
     public static AnalysisJobResponse from(
@@ -38,10 +40,18 @@ public record AnalysisJobResponse(
                 analysisJob.getStatus(),
                 result,
                 analysisJob.getErrorMessage(),
-                analysisJob.getStartedAt(),
-                analysisJob.getCompletedAt(),
-                analysisJob.getCreatedAt(),
-                analysisJob.getUpdatedAt()
+                toUtcOffsetDateTime(analysisJob.getStartedAt()),
+                toUtcOffsetDateTime(analysisJob.getCompletedAt()),
+                toUtcOffsetDateTime(analysisJob.getCreatedAt()),
+                toUtcOffsetDateTime(analysisJob.getUpdatedAt())
         );
+    }
+
+    private static OffsetDateTime toUtcOffsetDateTime(
+            LocalDateTime dateTime
+    ) {
+        return dateTime == null
+                ? null
+                : dateTime.atOffset(ZoneOffset.UTC);
     }
 }
