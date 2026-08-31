@@ -59,6 +59,12 @@ public final class DefaultRulePreset {
                     null
             ),
             new ConventionRulePreset(
+                    "study(kotlin):",
+                    "study",
+                    "kotlin",
+                    null
+            ),
+            new ConventionRulePreset(
                     "solve(java):",
                     "solve",
                     "java",

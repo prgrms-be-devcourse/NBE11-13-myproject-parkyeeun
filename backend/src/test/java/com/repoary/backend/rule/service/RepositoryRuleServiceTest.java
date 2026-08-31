@@ -133,7 +133,7 @@ class RepositoryRuleServiceTest {
                 toList(conventionCaptor.getValue());
 
         assertThat(conventionRules)
-                .hasSize(13)
+                .hasSize(14)
                 .extracting(ConventionRule::getMessagePattern)
                 .contains(
                         "docs(assignments):",

@@ -1,9 +1,11 @@
 package com.repoary.backend.analysis.repository;
 
 import com.repoary.backend.analysis.domain.AnalysisJob;
+import com.repoary.backend.analysis.domain.AnalysisJobStatus;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,5 +23,11 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, Long> 
     List<AnalysisJob> findAllByConnectedRepositoryAndTargetDateOrderByCreatedAtDesc(
             ConnectedRepository connectedRepository,
             java.time.LocalDate targetDate
+    );
+
+    Optional<AnalysisJob> findFirstByConnectedRepositoryAndTargetDateAndStatusOrderByCreatedAtDesc(
+            ConnectedRepository connectedRepository,
+            LocalDate targetDate,
+            AnalysisJobStatus status
     );
 }
