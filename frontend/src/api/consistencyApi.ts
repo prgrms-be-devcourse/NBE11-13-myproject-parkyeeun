@@ -5,6 +5,7 @@ import type {
 import {
   API_BASE_URL,
   authHeaders,
+  handleAuthenticationFailure,
 } from "./client";
 
 const getErrorMessage = async (
@@ -49,6 +50,8 @@ export const analyzeCommitConsistency = async (
       body: JSON.stringify(request),
     },
   );
+
+  handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(

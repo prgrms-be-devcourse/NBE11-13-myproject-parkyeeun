@@ -5,6 +5,7 @@ import type {
 import {
   API_BASE_URL,
   authHeaders,
+  handleAuthenticationFailure,
 } from "./client";
 
 const getErrorMessage = async (
@@ -40,6 +41,8 @@ const requestJson = async <T>(
   fallbackMessage: string,
 ): Promise<T> => {
   const response = await fetch(url, options);
+
+  handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(

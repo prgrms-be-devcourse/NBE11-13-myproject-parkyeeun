@@ -4,12 +4,18 @@ import {
   fetchAnalysisJob,
   fetchAnalysisJobs,
 } from "../api/analysisApi";
+import {
+  createTilDraft,
+  fetchTilByDate,
+  TilApiError,
+} from "../api/tilApi";
 import Layout from "../components/Layout";
 import ConsistencyAnalysisSection from "../components/analysis/ConsistencyAnalysisSection";
 import FileGroupList from "../components/analysis/FileGroupList";
 import type {
   AnalysisJob,
   AnalysisJobStatus,
+  TilDocument,
 } from "../types";
 
 type AnalysisPageProps = {
@@ -17,6 +23,8 @@ type AnalysisPageProps = {
 };
 
 type AnalysisTab = "commit" | "consistency";
+
+type TilLookupStatus = "idle" | "loading" | "ready" | "error";
 
 const getToday = () => {
   const now = new Date();
@@ -75,6 +83,13 @@ function AnalysisPage({
     useState<AnalysisJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState(false);
+  const [creatingTil, setCreatingTil] = useState(false);
+  const [existingTil, setExistingTil] =
+    useState<TilDocument | null>(null);
+  const [tilLookupKey, setTilLookupKey] = useState("");
+  const [tilLookupStatus, setTilLookupStatus] =
+    useState<TilLookupStatus>("idle");
+  const [tilLookupError, setTilLookupError] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const loadLatestAnalysis = useCallback(
@@ -134,12 +149,118 @@ function AnalysisPage({
     }
   };
 
+  const moveToTilEditor = (tilDocumentId: number) => {
+    window.location.assign(
+      `/repositories/${connectedRepositoryId}/til/${tilDocumentId}`,
+    );
+  };
+
+  const handleCreateTil = async () => {
+    if (!analysisJob) {
+      return;
+    }
+
+    setCreatingTil(true);
+    setErrorMessage("");
+
+    try {
+      const tilDocument = await createTilDraft(
+        connectedRepositoryId,
+        analysisJob.targetDate,
+      );
+
+      moveToTilEditor(tilDocument.id);
+    } catch (error) {
+      if (error instanceof TilApiError && error.status === 409) {
+        try {
+          const existingTil = await fetchTilByDate(
+            connectedRepositoryId,
+            analysisJob.targetDate,
+          );
+
+          moveToTilEditor(existingTil.id);
+          return;
+        } catch (fetchError) {
+          setErrorMessage(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "기존 TIL을 불러오는 중 오류가 발생했습니다.",
+          );
+        }
+      } else {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "TIL 초안 생성 중 오류가 발생했습니다.",
+        );
+      }
+    } finally {
+      setCreatingTil(false);
+    }
+  };
+
   useEffect(() => {
     void loadLatestAnalysis(targetDate);
   }, [loadLatestAnalysis, targetDate]);
 
   const analysisJobId = analysisJob?.id;
   const analysisJobStatus = analysisJob?.status;
+  const completedTilLookupKey =
+    analysisJobStatus === "COMPLETED" && analysisJob?.result
+      ? `${targetDate}:${analysisJob.id}:${analysisJob.targetDate}:${analysisJob.updatedAt}`
+      : "";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setExistingTil(null);
+    setTilLookupError("");
+
+    if (!completedTilLookupKey || !analysisJob) {
+      setTilLookupKey("");
+      setTilLookupStatus("idle");
+      return;
+    }
+
+    const lookupKey = completedTilLookupKey;
+    const lookupDate = analysisJob.targetDate;
+
+    setTilLookupKey(lookupKey);
+    setTilLookupStatus("loading");
+
+    void fetchTilByDate(connectedRepositoryId, lookupDate)
+      .then((tilDocument) => {
+        if (!cancelled) {
+          setExistingTil(tilDocument);
+          setTilLookupStatus("ready");
+        }
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (error instanceof TilApiError && error.status === 404) {
+          setTilLookupStatus("ready");
+          return;
+        }
+
+        setTilLookupStatus("error");
+        setTilLookupError(
+          error instanceof Error
+            ? error.message
+            : "TIL 존재 여부를 확인하는 중 오류가 발생했습니다.",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    analysisJob,
+    completedTilLookupKey,
+    connectedRepositoryId,
+  ]);
 
   useEffect(() => {
     if (
@@ -179,6 +300,21 @@ function AnalysisPage({
   const analysisRunning =
     analysisJobStatus === "PENDING" ||
     analysisJobStatus === "RUNNING";
+  const currentTilLookupStatus =
+    tilLookupKey === completedTilLookupKey
+      ? tilLookupStatus
+      : "loading";
+  const currentExistingTil =
+    currentTilLookupStatus === "ready" ? existingTil : null;
+
+  const handleTilAction = () => {
+    if (currentExistingTil) {
+      moveToTilEditor(currentExistingTil.id);
+      return;
+    }
+
+    void handleCreateTil();
+  };
 
   return (
     <Layout>
@@ -201,7 +337,7 @@ function AnalysisPage({
               `/repositories/${connectedRepositoryId}/rules`,
             )
           }
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
         >
           규칙 관리
         </button>
@@ -256,7 +392,7 @@ function AnalysisPage({
             </p>
           </div>
 
-          <section className="mt-6 rounded-xl border border-slate-200 p-5">
+          <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50/50 p-5">
             <label
               htmlFor="analysis-date"
               className="text-sm font-medium text-slate-700"
@@ -301,9 +437,9 @@ function AnalysisPage({
             </p>
           </section>
 
-          {errorMessage && (
+          {(errorMessage || tilLookupError) && (
             <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {errorMessage}
+              {errorMessage || tilLookupError}
             </div>
           )}
 
@@ -323,7 +459,7 @@ function AnalysisPage({
             </div>
           ) : (
             <>
-              <section className="mt-6 rounded-xl border border-slate-200 p-5">
+              <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50/50 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="font-semibold text-slate-900">
@@ -401,6 +537,26 @@ function AnalysisPage({
                           커밋을 분석했습니다.
                         </p>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTilAction}
+                        disabled={
+                          creatingTil ||
+                          currentTilLookupStatus !== "ready"
+                        }
+                        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingTil
+                          ? "TIL 생성 중..."
+                          : currentTilLookupStatus === "loading"
+                            ? "TIL 확인 중..."
+                            : currentTilLookupStatus === "error"
+                              ? "TIL 확인 실패"
+                              : currentExistingTil
+                                ? "TIL 확인하기"
+                                : "TIL 초안 만들기"}
+                      </button>
                     </div>
 
                     {analysisJob.result.commits.length ===

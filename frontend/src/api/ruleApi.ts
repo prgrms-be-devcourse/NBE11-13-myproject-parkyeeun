@@ -4,7 +4,11 @@ import type {
   ConventionRule,
   ConventionRuleRequest,
 } from "../types";
-import { API_BASE_URL, authHeaders } from "./client";
+import {
+  API_BASE_URL,
+  authHeaders,
+  handleAuthenticationFailure,
+} from "./client";
 
 const getErrorMessage = async (
   response: Response,
@@ -37,6 +41,8 @@ const requestJson = async <T>(
 ): Promise<T> => {
   const response = await fetch(url, options);
 
+  handleAuthenticationFailure(response);
+
   if (!response.ok) {
     throw new Error(
       await getErrorMessage(response, fallbackMessage),
@@ -52,6 +58,8 @@ const requestNoContent = async (
   fallbackMessage: string,
 ): Promise<void> => {
   const response = await fetch(url, options);
+
+  handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  clearAuthenticationStorage,
   fetchMe,
   getAccessToken,
-  removeAccessToken,
 } from "../api/client";
 import type { User } from "../types";
 
@@ -20,10 +20,7 @@ function Layout({ children }: LayoutProps) {
   };
 
   const handleLogout = () => {
-    removeAccessToken();
-    localStorage.removeItem(
-      "repoarySelectedConnectedRepositoryId",
-    );
+    clearAuthenticationStorage();
     window.location.replace("/");
   };
 
@@ -45,8 +42,8 @@ function Layout({ children }: LayoutProps) {
   }, [accessToken]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <section className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100/70 px-4 py-6 sm:px-6">
+      <section className="w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-500">

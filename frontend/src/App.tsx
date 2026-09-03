@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import RepositoryPage from "./pages/RepositoryPage";
 import RuleManagementPage from "./pages/RuleManagementPage";
 import AnalysisPage from "./pages/AnalysisPage";
+import TilEditorPage from "./pages/TilEditorPage";
 
 const getRuleRepositoryId = (pathname: string) => {
   const match = pathname.match(
@@ -38,6 +39,30 @@ const getAnalysisRepositoryId = (pathname: string) => {
     : null;
 };
 
+const getTilEditorIds = (pathname: string) => {
+  const match = pathname.match(
+    /^\/repositories\/(\d+)\/til\/(\d+)$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const connectedRepositoryId = Number(match[1]);
+  const tilDocumentId = Number(match[2]);
+
+  if (
+    !Number.isInteger(connectedRepositoryId) ||
+    connectedRepositoryId <= 0 ||
+    !Number.isInteger(tilDocumentId) ||
+    tilDocumentId <= 0
+  ) {
+    return null;
+  }
+
+  return { connectedRepositoryId, tilDocumentId };
+};
+
 function App() {
   const pathname = window.location.pathname;
   const accessToken = getAccessToken();
@@ -47,11 +72,21 @@ function App() {
   }
 
   if (!accessToken) {
+    if (pathname !== "/") {
+      window.location.replace("/");
+    }
+
     return <LoginPage />;
   }
 
   if (pathname === "/repositories") {
     return <RepositoryPage />;
+  }
+
+  const tilEditorIds = getTilEditorIds(pathname);
+
+  if (tilEditorIds !== null) {
+    return <TilEditorPage {...tilEditorIds} />;
   }
 
   const ruleRepositoryId = getRuleRepositoryId(pathname);

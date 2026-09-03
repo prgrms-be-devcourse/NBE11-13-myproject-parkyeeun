@@ -114,14 +114,14 @@ function DashboardPage() {
                 onClick={() =>
                   window.location.assign("/repositories")
                 }
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
               >
                 저장소 관리
               </button>
             </div>
           </section>
 
-          <section className="mt-6 rounded-xl border border-slate-200 p-5">
+          <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50/50 p-5">
             <label
               htmlFor="repository"
               className="text-sm font-medium text-slate-700"
@@ -169,7 +169,7 @@ function DashboardPage() {
                   `/repositories/${selectedRepository.id}/rules`,
                 );
               }}
-              className="rounded-xl border border-slate-200 p-5 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-200 bg-slate-100/50 p-5 text-left transition-colors hover:bg-slate-200/60 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <p className="font-semibold text-slate-900">
                 규칙 관리
@@ -192,7 +192,7 @@ function DashboardPage() {
                   `/repositories/${selectedRepository.id}/analysis`,
                 );
               }}
-              className="rounded-xl border border-slate-200 p-5 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-200 bg-slate-100/70 p-5 text-left transition-colors hover:bg-slate-200/70 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <p className="font-semibold text-slate-900">
                 커밋 분석
