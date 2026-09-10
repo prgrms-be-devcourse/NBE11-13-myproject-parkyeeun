@@ -12,6 +12,7 @@ import {
 import Layout from "../components/Layout";
 import ConsistencyAnalysisSection from "../components/analysis/ConsistencyAnalysisSection";
 import FileGroupList from "../components/analysis/FileGroupList";
+import ReadmeRowSection from "../components/analysis/ReadmeRowSection";
 import type {
   AnalysisJob,
   AnalysisJobStatus,
@@ -525,39 +526,59 @@ function AnalysisPage({
 
               {analysisJob.status === "COMPLETED" &&
                 analysisJob.result && (
-                  <section className="mt-6">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-900">
-                          분석 결과
-                        </h3>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          총 {analysisJob.result.commitCount}개의
-                          커밋을 분석했습니다.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleTilAction}
-                        disabled={
-                          creatingTil ||
-                          currentTilLookupStatus !== "ready"
+                  <>
+                    {analysisJob.targetDate === targetDate && (
+                      <ReadmeRowSection
+                        key={`${connectedRepositoryId}:${completedTilLookupKey}`}
+                        connectedRepositoryId={connectedRepositoryId}
+                        targetDate={analysisJob.targetDate}
+                        canGenerate={!!currentExistingTil && !executing}
+                        tilAction={
+                          <button
+                            type="button"
+                            onClick={handleTilAction}
+                            disabled={
+                              creatingTil ||
+                              currentTilLookupStatus !== "ready"
+                            }
+                            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {creatingTil
+                              ? "TIL 생성 중..."
+                              : currentTilLookupStatus === "loading"
+                                ? "TIL 확인 중..."
+                                : currentTilLookupStatus === "error"
+                                  ? "TIL 확인 실패"
+                                  : currentExistingTil
+                                    ? "TIL 확인하기"
+                                    : "TIL 초안 만들기"}
+                          </button>
                         }
-                        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {creatingTil
-                          ? "TIL 생성 중..."
-                          : currentTilLookupStatus === "loading"
-                            ? "TIL 확인 중..."
+                        unavailableMessage={
+                          executing
+                            ? "분석 완료 후 README 행을 생성할 수 있습니다."
                             : currentTilLookupStatus === "error"
-                              ? "TIL 확인 실패"
-                              : currentExistingTil
-                                ? "TIL 확인하기"
-                                : "TIL 초안 만들기"}
-                      </button>
-                    </div>
+                              ? "TIL 존재 여부를 확인하지 못했습니다."
+                              : currentTilLookupStatus !== "ready"
+                                ? "TIL 존재 여부를 확인하고 있습니다."
+                                : "TIL이 있어야 README 행을 생성할 수 있습니다."
+                        }
+                        showMissingTilTooltip={
+                          !executing &&
+                          currentTilLookupStatus === "ready" &&
+                          !currentExistingTil
+                        }
+                      />
+                    )}
+
+                    <section className="mt-6 border-t border-slate-200 pt-6">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        분석 결과
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        총 {analysisJob.result.commitCount}개의
+                        커밋을 분석했습니다.
+                      </p>
 
                     {analysisJob.result.commits.length ===
                     0 ? (
@@ -628,7 +649,8 @@ function AnalysisPage({
                         )}
                       </ul>
                     )}
-                  </section>
+                    </section>
+                  </>
                 )}
             </>
           )}
