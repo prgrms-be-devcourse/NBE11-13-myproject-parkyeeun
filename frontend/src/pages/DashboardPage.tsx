@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import { fetchConnectedRepositories } from "../api/client";
 import Layout from "../components/Layout";
+import RecordCheckSection from "../components/RecordCheckSection";
 import type { ConnectedRepository } from "../types";
 
 const SELECTED_REPOSITORY_KEY =
@@ -205,6 +206,9 @@ function DashboardPage() {
                 </p>
             </button>
           </section>
+          {selectedRepository && (
+            <RecordCheckSection key={selectedRepository.id} repository={selectedRepository} />
+          )}
         </>
       )}
     </Layout>

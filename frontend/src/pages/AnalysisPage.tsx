@@ -36,6 +36,23 @@ const getToday = () => {
     .slice(0, 10);
 };
 
+const getInitialDate = () => {
+  const date = new URLSearchParams(window.location.search).get("date");
+
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const parsed = new Date(`${date}T00:00:00Z`);
+
+    if (
+      Number.isFinite(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === date
+    ) {
+      return date;
+    }
+  }
+
+  return getToday();
+};
+
 const getStatusLabel = (status: AnalysisJobStatus) => {
   switch (status) {
     case "PENDING":
@@ -79,7 +96,7 @@ function AnalysisPage({
 }: AnalysisPageProps) {
   const [activeTab, setActiveTab] =
     useState<AnalysisTab>("commit");
-  const [targetDate, setTargetDate] = useState(getToday());
+  const [targetDate, setTargetDate] = useState(getInitialDate);
   const [analysisJob, setAnalysisJob] =
     useState<AnalysisJob | null>(null);
   const [loading, setLoading] = useState(true);
