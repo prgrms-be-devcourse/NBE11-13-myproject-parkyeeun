@@ -6,10 +6,13 @@ import com.repoary.backend.github.dto.GitHubContentResponse;
 import com.repoary.backend.github.dto.GitHubRepositoryResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class GitHubApiClient {
@@ -71,20 +74,43 @@ public class GitHubApiClient {
             Instant since,
             Instant until
     ) {
-        List<GitHubCommitResponse> commits = restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/repos/{owner}/{repository}/commits")
-                        .queryParam("sha", defaultBranch)
-                        .queryParam("since", since.toString())
-                        .queryParam("until", until.toString())
-                        .queryParam("per_page", 100)
-                        .build(owner, repositoryName))
-                .headers(headers -> setGitHubHeaders(headers, accessToken))
-                .retrieve()
-                .body(new ParameterizedTypeReference<>() {
-                });
+        List<GitHubCommitResponse> allCommits = new ArrayList<>();
 
-        return commits == null ? List.of() : commits;
+        int page = 1;
+        int perPage = 100;
+
+        while (true) {
+            int currentPage = page;
+
+            List<GitHubCommitResponse> commits = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repository}/commits")
+                            .queryParam("sha", defaultBranch)
+                            .queryParam("since", since.toString())
+                            .queryParam("until", until.toString())
+                            .queryParam("per_page", perPage)
+                            .queryParam("page", currentPage)
+                            .build(owner, repositoryName))
+                    .headers(headers ->
+                            setGitHubHeaders(headers, accessToken))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    });
+
+            if (commits == null || commits.isEmpty()) {
+                break;
+            }
+
+            allCommits.addAll(commits);
+
+            if (commits.size() < perPage) {
+                break;
+            }
+
+            page++;
+        }
+
+        return allCommits;
     }
 
     private void setGitHubHeaders(
@@ -118,5 +144,30 @@ public class GitHubApiClient {
         }
 
         return response;
+    }
+
+    public Optional<GitHubContentResponse> getContent(
+            String accessToken,
+            String owner,
+            String repositoryName,
+            String defaultBranch,
+            String path
+    ) {
+        try {
+            GitHubContentResponse response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repository}/contents/")
+                            .path(path)
+                            .queryParam("ref", defaultBranch)
+                            .build(owner, repositoryName))
+                    .headers(headers ->
+                            setGitHubHeaders(headers, accessToken))
+                    .retrieve()
+                    .body(GitHubContentResponse.class);
+
+            return Optional.ofNullable(response);
+        } catch (HttpClientErrorException.NotFound exception) {
+            return Optional.empty();
+        }
     }
 }
