@@ -4,13 +4,15 @@ import com.repoary.backend.analysis.domain.AnalysisJob;
 import com.repoary.backend.analysis.domain.AnalysisJobStatus;
 import com.repoary.backend.analysis.dto.StoredAnalysisResult;
 import com.repoary.backend.analysis.repository.AnalysisJobRepository;
-import com.repoary.backend.common.exception.ConflictException;
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.til.domain.TilDocument;
+import com.repoary.backend.til.exception.TilErrorCode;
 import com.repoary.backend.til.repository.TilDocumentRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,9 +53,7 @@ public class TilService {
             LocalDate targetDate
     ) {
         if (targetDate == null) {
-            throw new IllegalArgumentException(
-                    "TIL 날짜는 필수입니다."
-            );
+            throw new BusinessException(TilErrorCode.DATE_REQUIRED);
         }
 
         ConnectedRepository connectedRepository =
@@ -67,9 +67,7 @@ public class TilService {
                         connectedRepository,
                         targetDate
                 )) {
-            throw new ConflictException(
-                    "해당 날짜의 TIL이 이미 존재합니다."
-            );
+            throw new BusinessException(TilErrorCode.ALREADY_EXISTS);
         }
 
         AnalysisJob analysisJob =
@@ -80,8 +78,8 @@ public class TilService {
                                 AnalysisJobStatus.COMPLETED
                         )
                         .orElseThrow(() ->
-                                new NotFoundException(
-                                        "완료된 분석 결과를 찾을 수 없습니다."
+                                new BusinessException(
+                                        TilErrorCode.COMPLETED_ANALYSIS_NOT_FOUND
                                 )
                         );
 
@@ -118,9 +116,7 @@ public class TilService {
             LocalDate targetDate
     ) {
         if (targetDate == null) {
-            throw new IllegalArgumentException(
-                    "TIL 날짜는 필수입니다."
-            );
+            throw new BusinessException(TilErrorCode.DATE_REQUIRED);
         }
 
         ConnectedRepository connectedRepository =
@@ -135,9 +131,7 @@ public class TilService {
                         targetDate
                 )
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "TIL을 찾을 수 없습니다."
-                        )
+                        new BusinessException(TilErrorCode.NOT_FOUND)
                 );
     }
 
@@ -159,9 +153,7 @@ public class TilService {
                         connectedRepository
                 )
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "TIL을 찾을 수 없습니다."
-                        )
+                        new BusinessException(TilErrorCode.NOT_FOUND)
                 );
     }
 
@@ -172,6 +164,10 @@ public class TilService {
             Long tilDocumentId,
             String content
     ) {
+        if (content == null || content.isBlank()) {
+            throw new BusinessException(TilErrorCode.CONTENT_REQUIRED);
+        }
+
         ConnectedRepository connectedRepository =
                 getOwnedConnectedRepository(
                         userId,
@@ -185,9 +181,7 @@ public class TilService {
                                 connectedRepository
                         )
                         .orElseThrow(() ->
-                                new NotFoundException(
-                                        "TIL을 찾을 수 없습니다."
-                                )
+                                new BusinessException(TilErrorCode.NOT_FOUND)
                         );
 
         tilDocument.updateContent(content);
@@ -223,9 +217,7 @@ public class TilService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -234,8 +226,8 @@ public class TilService {
                         user
                 )
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }

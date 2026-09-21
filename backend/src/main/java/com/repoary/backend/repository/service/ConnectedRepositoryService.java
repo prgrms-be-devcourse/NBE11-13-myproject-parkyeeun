@@ -1,11 +1,14 @@
 package com.repoary.backend.repository.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.dto.ConnectRepositoryRequest;
 import com.repoary.backend.repository.dto.ConnectedRepositoryResponse;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.service.RepositoryRuleService;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,11 +37,11 @@ public class ConnectedRepositoryService {
             Long userId,
             ConnectRepositoryRequest request
     ) {
+        validateConnectRequest(request);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         ConnectedRepository connectedRepository =
@@ -69,15 +72,30 @@ public class ConnectedRepositoryService {
         return ConnectedRepositoryResponse.from(connectedRepository);
     }
 
+    private void validateConnectRequest(ConnectRepositoryRequest request) {
+        if (request == null
+                || request.githubRepositoryId() == null
+                || request.name() == null
+                || request.name().isBlank()
+                || request.fullName() == null
+                || !request.fullName().matches("[^/\\s]+/[^/\\s]+")
+                || request.htmlUrl() == null
+                || request.htmlUrl().isBlank()
+                || request.defaultBranch() == null
+                || request.defaultBranch().isBlank()) {
+            throw new BusinessException(
+                    RepositoryErrorCode.INVALID_CONNECT_REQUEST
+            );
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<ConnectedRepositoryResponse> getConnectedRepositories(
             Long userId
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -94,9 +112,7 @@ public class ConnectedRepositoryService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         connectedRepositoryRepository

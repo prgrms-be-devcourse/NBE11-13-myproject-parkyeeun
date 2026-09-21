@@ -1,5 +1,7 @@
 package com.repoary.backend.readme.service;
 
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.readme.exception.ReadmeErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -13,17 +15,13 @@ public class ReadmeSummaryGenerator {
 
     public String generate(String tilContent) {
         if (tilContent == null || tilContent.isBlank()) {
-            throw new IllegalArgumentException(
-                    "TIL 내용은 필수입니다."
-            );
+            throw invalidTilFormat();
         }
 
         String section = extractLearningSummarySection(tilContent);
 
         if (section.isBlank()) {
-            throw new IllegalStateException(
-                    "TIL의 오늘 학습 정리 내용을 찾을 수 없습니다."
-            );
+            throw invalidTilFormat();
         }
 
         return parseSummary(section);
@@ -91,9 +89,7 @@ public class ReadmeSummaryGenerator {
         addGroup(groups, currentItems);
 
         if (groups.isEmpty()) {
-            throw new IllegalStateException(
-                    "README Summary로 변환할 학습 내용이 없습니다."
-            );
+            throw invalidTilFormat();
         }
 
         return String.join(" / ", groups);
@@ -127,5 +123,9 @@ public class ReadmeSummaryGenerator {
                         ""
                 )
                 .trim();
+    }
+
+    private BusinessException invalidTilFormat() {
+        return new BusinessException(ReadmeErrorCode.INVALID_TIL_FORMAT);
     }
 }

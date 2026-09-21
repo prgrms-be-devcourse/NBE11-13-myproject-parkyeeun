@@ -1,11 +1,16 @@
 package com.repoary.backend.github.service;
 
+import com.repoary.backend.analysis.exception.AnalysisErrorCode;
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.github.dto.GitHubCommitDetailResponse;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
+import com.repoary.backend.github.exception.GitHubErrorCode;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +47,10 @@ public class GitHubCommitService {
             Long connectedRepositoryId,
             LocalDate targetDate
     ) {
+        if (targetDate == null) {
+            throw new BusinessException(AnalysisErrorCode.DATE_REQUIRED);
+        }
+
         RepositoryContext context = getRepositoryContext(
                 userId,
                 connectedRepositoryId
@@ -76,15 +85,11 @@ public class GitHubCommitService {
             LocalDate to
     ) {
         if (from == null || to == null) {
-            throw new IllegalArgumentException(
-                    "분석 시작일과 종료일은 필수입니다."
-            );
+            throw new BusinessException(AnalysisErrorCode.DATE_RANGE_REQUIRED);
         }
 
         if (from.isAfter(to)) {
-            throw new IllegalArgumentException(
-                    "분석 시작일은 종료일보다 늦을 수 없습니다."
-            );
+            throw new BusinessException(AnalysisErrorCode.INVALID_DATE_RANGE);
         }
 
         RepositoryContext context = getRepositoryContext(
@@ -120,7 +125,7 @@ public class GitHubCommitService {
             String commitSha
     ) {
         if (commitSha == null || commitSha.isBlank()) {
-            throw new IllegalArgumentException("커밋 SHA는 필수입니다.");
+            throw new BusinessException(GitHubErrorCode.COMMIT_SHA_REQUIRED);
         }
 
         RepositoryContext context = getRepositoryContext(
@@ -142,7 +147,7 @@ public class GitHubCommitService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("사용자를 찾을 수 없습니다.")
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         validateAccessToken(user);
@@ -150,7 +155,9 @@ public class GitHubCommitService {
         ConnectedRepository repository = connectedRepositoryRepository
                 .findByIdAndUser(connectedRepositoryId, user)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("연결된 저장소를 찾을 수 없습니다.")
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
+                        )
                 );
 
         String[] repositoryName = repository.getFullName().split("/", 2);
@@ -174,9 +181,7 @@ public class GitHubCommitService {
     private void validateAccessToken(User user) {
         if (user.getGithubAccessToken() == null
                 || user.getGithubAccessToken().isBlank()) {
-            throw new IllegalStateException(
-                    "GitHub access token이 없습니다."
-            );
+            throw new BusinessException(GitHubErrorCode.ACCESS_TOKEN_MISSING);
         }
     }
 

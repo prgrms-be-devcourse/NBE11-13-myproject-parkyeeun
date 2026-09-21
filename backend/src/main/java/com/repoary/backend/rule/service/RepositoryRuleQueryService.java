@@ -1,12 +1,15 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.dto.ClassificationRuleResponse;
 import com.repoary.backend.rule.dto.ConventionRuleResponse;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,16 +82,14 @@ public class RepositoryRuleQueryService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
                 .findByIdAndUser(connectedRepositoryId, user)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }

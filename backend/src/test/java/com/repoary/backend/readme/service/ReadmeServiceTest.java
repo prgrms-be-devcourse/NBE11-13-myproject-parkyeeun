@@ -1,7 +1,10 @@
 package com.repoary.backend.readme.service;
 
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.readme.dto.ReadmeRowResponse;
+import com.repoary.backend.readme.exception.ReadmeErrorCode;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
+import com.repoary.backend.til.exception.TilErrorCode;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.til.domain.TilDocument;
@@ -177,9 +180,10 @@ class ReadmeServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "해당 날짜의 TIL을 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(TilErrorCode.DATE_NOT_FOUND)
                 );
     }
 
@@ -207,9 +211,10 @@ class ReadmeServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "연결된 저장소를 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND)
                 );
     }
 
@@ -222,9 +227,10 @@ class ReadmeServiceTest {
                         null
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "README 날짜는 필수입니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ReadmeErrorCode.DATE_REQUIRED)
                 );
     }
 }

@@ -1,6 +1,8 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
 import com.repoary.backend.rule.domain.ConventionRule;
@@ -8,6 +10,7 @@ import com.repoary.backend.rule.dto.ClassificationRuleRequest;
 import com.repoary.backend.rule.dto.ClassificationRuleResponse;
 import com.repoary.backend.rule.dto.ConventionRuleRequest;
 import com.repoary.backend.rule.dto.ConventionRuleResponse;
+import com.repoary.backend.rule.exception.RuleErrorCode;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
 import com.repoary.backend.user.domain.User;
@@ -187,8 +190,15 @@ class RepositoryRuleCommandServiceTest {
                         request
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("이미 존재하는 경로 패턴입니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RuleErrorCode.DUPLICATE_PATH_PATTERN);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(400);
+                        }
+                );
 
         verify(classificationRuleRepository, never())
                 .save(any(ClassificationRule.class));
@@ -214,8 +224,11 @@ class RepositoryRuleCommandServiceTest {
                         request
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("우선순위는 0 이상이어야 합니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RuleErrorCode.INVALID_PRIORITY)
+                );
 
         verify(classificationRuleRepository, never())
                 .save(any(ClassificationRule.class));
@@ -419,9 +432,10 @@ class RepositoryRuleCommandServiceTest {
                         request
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "commitType, scope, category 중 하나 이상은 필요합니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RuleErrorCode.MATCH_CONDITION_REQUIRED)
                 );
 
         verify(conventionRuleRepository, never())
@@ -456,9 +470,10 @@ class RepositoryRuleCommandServiceTest {
                         request
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "이미 존재하는 커밋 메시지 패턴입니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RuleErrorCode.DUPLICATE_MESSAGE_PATTERN)
                 );
 
         verify(conventionRuleRepository, never())
@@ -616,8 +631,15 @@ class RepositoryRuleCommandServiceTest {
                         request
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("연결된 저장소를 찾을 수 없습니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(404);
+                        }
+                );
 
         verify(classificationRuleRepository, never())
                 .save(any(ClassificationRule.class));

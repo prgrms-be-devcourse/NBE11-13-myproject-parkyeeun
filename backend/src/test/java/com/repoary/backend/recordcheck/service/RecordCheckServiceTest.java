@@ -1,9 +1,13 @@
 package com.repoary.backend.recordcheck.service;
 
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.common.exception.ExternalSystemException;
 import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.dto.GitHubContentResponse;
+import com.repoary.backend.github.exception.GitHubErrorCode;
+import com.repoary.backend.recordcheck.exception.RecordCheckErrorCode;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.recordcheck.dto.RecordCheckResponse;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
@@ -462,9 +466,14 @@ class RecordCheckServiceTest {
                         YearMonth.of(2026, 9)
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "연결된 저장소를 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(404);
+                        }
                 );
     }
 
@@ -477,10 +486,41 @@ class RecordCheckServiceTest {
                         null
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "점검할 월은 필수입니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RecordCheckErrorCode.MONTH_REQUIRED);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(400);
+                        }
                 );
+    }
+
+    @Test
+    void README_인코딩이_base64가_아니면_잘못된_GitHub_응답으로_처리한다() {
+        assertInvalidReadmeContent(
+                new GitHubContentResponse(
+                        "README.md",
+                        "til/2026-09/README.md",
+                        "file",
+                        "content",
+                        "utf-8"
+                )
+        );
+    }
+
+    @Test
+    void README의_base64_내용이_잘못되면_잘못된_GitHub_응답으로_처리한다() {
+        assertInvalidReadmeContent(
+                new GitHubContentResponse(
+                        "README.md",
+                        "til/2026-09/README.md",
+                        "file",
+                        "A",
+                        "base64"
+                )
+        );
     }
 
     @Test
@@ -674,5 +714,34 @@ class RecordCheckServiceTest {
                                 StandardCharsets.UTF_8
                         )
                 );
+    }
+
+    private void assertInvalidReadmeContent(
+            GitHubContentResponse content
+    ) {
+        Long userId = 1L;
+        Long connectedRepositoryId = 10L;
+        YearMonth month = YearMonth.of(2026, 9);
+        LocalDate targetDate = LocalDate.of(2026, 9, 10);
+
+        givenRepositoryContext(userId, connectedRepositoryId);
+        givenMonthlyCommits(
+                month,
+                List.of(commit(
+                        "study(java): 2026-09-10 외부 응답 검증",
+                        targetDate.atTime(15, 0).atZone(KST).toInstant()
+                ))
+        );
+        givenMonthlyReadme(month, Optional.of(content));
+
+        assertThatThrownBy(() -> recordCheckService.check(
+                userId,
+                connectedRepositoryId,
+                month
+        )).isInstanceOfSatisfying(
+                ExternalSystemException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(GitHubErrorCode.INVALID_RESPONSE)
+        );
     }
 }

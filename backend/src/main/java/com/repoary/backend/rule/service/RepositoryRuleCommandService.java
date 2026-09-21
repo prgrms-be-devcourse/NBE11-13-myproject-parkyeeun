@@ -1,6 +1,8 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
 import com.repoary.backend.rule.domain.ConventionRule;
@@ -10,7 +12,9 @@ import com.repoary.backend.rule.dto.ConventionRuleRequest;
 import com.repoary.backend.rule.dto.ConventionRuleResponse;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
+import com.repoary.backend.rule.exception.RuleErrorCode;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -243,16 +247,14 @@ public class RepositoryRuleCommandService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
                 .findByIdAndUser(connectedRepositoryId, user)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }
@@ -267,8 +269,8 @@ public class RepositoryRuleCommandService {
                         connectedRepository
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "경로 규칙을 찾을 수 없습니다."
+                        new BusinessException(
+                                RuleErrorCode.CLASSIFICATION_RULE_NOT_FOUND
                         )
                 );
     }
@@ -283,8 +285,8 @@ public class RepositoryRuleCommandService {
                         connectedRepository
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "커밋 규칙을 찾을 수 없습니다."
+                        new BusinessException(
+                                RuleErrorCode.CONVENTION_RULE_NOT_FOUND
                         )
                 );
     }
@@ -294,16 +296,12 @@ public class RepositoryRuleCommandService {
     ) {
         if (request.pathPattern() == null
                 || request.pathPattern().isBlank()) {
-            throw new IllegalArgumentException(
-                    "경로 패턴은 필수입니다."
-            );
+            throw new BusinessException(RuleErrorCode.PATH_PATTERN_REQUIRED);
         }
 
         if (request.category() == null
                 || request.category().isBlank()) {
-            throw new IllegalArgumentException(
-                    "카테고리는 필수입니다."
-            );
+            throw new BusinessException(RuleErrorCode.CATEGORY_REQUIRED);
         }
 
         validatePriority(request.priority());
@@ -314,9 +312,7 @@ public class RepositoryRuleCommandService {
     ) {
         if (request.messagePattern() == null
                 || request.messagePattern().isBlank()) {
-            throw new IllegalArgumentException(
-                    "커밋 메시지 패턴은 필수입니다."
-            );
+            throw new BusinessException(RuleErrorCode.MESSAGE_PATTERN_REQUIRED);
         }
 
         boolean hasResult =
@@ -325,9 +321,7 @@ public class RepositoryRuleCommandService {
                         || hasText(request.category());
 
         if (!hasResult) {
-            throw new IllegalArgumentException(
-                    "commitType, scope, category 중 하나 이상은 필요합니다."
-            );
+            throw new BusinessException(RuleErrorCode.MATCH_CONDITION_REQUIRED);
         }
 
         validatePriority(request.priority());
@@ -335,9 +329,7 @@ public class RepositoryRuleCommandService {
 
     private void validatePriority(Integer priority) {
         if (priority != null && priority < 0) {
-            throw new IllegalArgumentException(
-                    "우선순위는 0 이상이어야 합니다."
-            );
+            throw new BusinessException(RuleErrorCode.INVALID_PRIORITY);
         }
     }
 
@@ -362,9 +354,7 @@ public class RepositoryRuleCommandService {
                 );
 
         if (exists) {
-            throw new IllegalArgumentException(
-                    "이미 존재하는 경로 패턴입니다."
-            );
+            throw new BusinessException(RuleErrorCode.DUPLICATE_PATH_PATTERN);
         }
     }
 
@@ -389,9 +379,7 @@ public class RepositoryRuleCommandService {
                 );
 
         if (exists) {
-            throw new IllegalArgumentException(
-                    "이미 존재하는 커밋 메시지 패턴입니다."
-            );
+            throw new BusinessException(RuleErrorCode.DUPLICATE_MESSAGE_PATTERN);
         }
     }
 

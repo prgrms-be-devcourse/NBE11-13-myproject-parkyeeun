@@ -1,6 +1,10 @@
 package com.repoary.backend.readme.service;
 
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.readme.exception.ReadmeErrorCode;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
+import com.repoary.backend.til.exception.TilErrorCode;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.readme.dto.ReadmeRowResponse;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
@@ -43,9 +47,7 @@ public class ReadmeService {
             LocalDate targetDate
     ) {
         if (targetDate == null) {
-            throw new IllegalArgumentException(
-                    "README 날짜는 필수입니다."
-            );
+            throw new BusinessException(ReadmeErrorCode.DATE_REQUIRED);
         }
 
         ConnectedRepository connectedRepository =
@@ -61,9 +63,7 @@ public class ReadmeService {
                                 targetDate
                         )
                         .orElseThrow(() ->
-                                new NotFoundException(
-                                        "해당 날짜의 TIL을 찾을 수 없습니다."
-                                )
+                                new BusinessException(TilErrorCode.DATE_NOT_FOUND)
                         );
 
         String summary =
@@ -107,9 +107,7 @@ public class ReadmeService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -118,8 +116,8 @@ public class ReadmeService {
                         user
                 )
                 .orElseThrow(() ->
-                        new NotFoundException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }

@@ -1,6 +1,11 @@
 package com.repoary.backend.recordcheck.service;
 
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.common.exception.ExternalSystemException;
+import com.repoary.backend.github.exception.GitHubErrorCode;
+import com.repoary.backend.recordcheck.exception.RecordCheckErrorCode;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.dto.GitHubContentResponse;
@@ -64,9 +69,7 @@ public class RecordCheckService {
             YearMonth month
     ) {
         if (month == null) {
-            throw new IllegalArgumentException(
-                    "점검할 월은 필수입니다."
-            );
+            throw new BusinessException(RecordCheckErrorCode.MONTH_REQUIRED);
         }
 
         RepositoryContext context =
@@ -327,8 +330,9 @@ public class RecordCheckService {
         if (!"base64".equalsIgnoreCase(
                 content.encoding()
         )) {
-            throw new IllegalStateException(
-                    "지원하지 않는 GitHub 파일 인코딩입니다."
+            throw new ExternalSystemException(
+                    GitHubErrorCode.INVALID_RESPONSE,
+                    null
             );
         }
 
@@ -344,8 +348,8 @@ public class RecordCheckService {
                     StandardCharsets.UTF_8
             );
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException(
-                    "GitHub README 내용을 읽을 수 없습니다.",
+            throw new ExternalSystemException(
+                    GitHubErrorCode.INVALID_RESPONSE,
                     exception
             );
         }
@@ -379,8 +383,8 @@ public class RecordCheckService {
         User user =
                 userRepository.findById(userId)
                         .orElseThrow(() ->
-                                new NotFoundException(
-                                        "사용자를 찾을 수 없습니다."
+                                new BusinessException(
+                                        UserErrorCode.USER_NOT_FOUND
                                 )
                         );
 
@@ -391,17 +395,15 @@ public class RecordCheckService {
                                 user
                         )
                         .orElseThrow(() ->
-                                new NotFoundException(
-                                        "연결된 저장소를 찾을 수 없습니다."
+                                new BusinessException(
+                                        RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                                 )
                         );
 
         if (user.getGithubAccessToken() == null
                 || user.getGithubAccessToken()
                 .isBlank()) {
-            throw new IllegalStateException(
-                    "GitHub access token이 없습니다."
-            );
+            throw new BusinessException(GitHubErrorCode.ACCESS_TOKEN_MISSING);
         }
 
         String[] repositoryName =

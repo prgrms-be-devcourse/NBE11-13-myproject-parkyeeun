@@ -1,5 +1,6 @@
 package com.repoary.backend.analysis.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.analysis.dto.ClassificationMatchResult;
 import com.repoary.backend.analysis.dto.CommitConsistencyResponse;
 import com.repoary.backend.analysis.dto.ConsistencyCommitResponse;
@@ -740,7 +741,7 @@ class CommitConsistencyServiceTest {
                         TO
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage(
                         "분석 시작일과 종료일은 필수입니다."
                 );
@@ -753,7 +754,7 @@ class CommitConsistencyServiceTest {
                         null
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage(
                         "분석 시작일과 종료일은 필수입니다."
                 );
@@ -781,7 +782,7 @@ class CommitConsistencyServiceTest {
                         invalidTo
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage(
                         "분석 시작일은 종료일보다 늦을 수 없습니다."
                 );
@@ -823,7 +824,7 @@ class CommitConsistencyServiceTest {
                         TO
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage(
                         "연결된 저장소를 찾을 수 없습니다."
                 );

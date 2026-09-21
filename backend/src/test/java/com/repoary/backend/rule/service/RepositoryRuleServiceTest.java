@@ -1,5 +1,6 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
@@ -307,8 +308,8 @@ class RepositoryRuleServiceTest {
                         connectedRepository
                 )
         )
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("GitHub access token을 찾을 수 없습니다.");
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("GitHub 인증 정보가 없습니다.");
 
         verify(gitHubApiClient, never())
                 .getRootDirectoryNames(

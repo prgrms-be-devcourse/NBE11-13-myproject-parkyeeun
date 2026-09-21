@@ -1,5 +1,6 @@
 package com.repoary.backend.analysis.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.analysis.dto.ClassificationMatchResult;
 import com.repoary.backend.analysis.dto.CommitAnalysisResponse;
 import com.repoary.backend.analysis.dto.ConventionMatchResult;
@@ -7,12 +8,14 @@ import com.repoary.backend.github.dto.GitHubCommitDetailResponse;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.service.GitHubCommitService;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
 import com.repoary.backend.rule.domain.ConventionRule;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
@@ -156,9 +159,7 @@ public class CommitAnalysisService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -167,8 +168,8 @@ public class CommitAnalysisService {
                         user
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }

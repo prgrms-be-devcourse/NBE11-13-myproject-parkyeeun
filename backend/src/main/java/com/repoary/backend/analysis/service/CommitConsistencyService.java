@@ -1,5 +1,7 @@
 package com.repoary.backend.analysis.service;
 
+import com.repoary.backend.analysis.exception.AnalysisErrorCode;
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.analysis.dto.ClassificationMatchResult;
 import com.repoary.backend.analysis.dto.CommitConsistencyResponse;
 import com.repoary.backend.analysis.dto.ConsistencyCommitResponse;
@@ -9,12 +11,14 @@ import com.repoary.backend.github.dto.GitHubCommitDetailResponse;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.service.GitHubCommitService;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
 import com.repoary.backend.rule.domain.ConventionRule;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -517,14 +521,14 @@ public class CommitConsistencyService {
             LocalDate to
     ) {
         if (from == null || to == null) {
-            throw new IllegalArgumentException(
-                    "분석 시작일과 종료일은 필수입니다."
+            throw new BusinessException(
+                    AnalysisErrorCode.DATE_RANGE_REQUIRED
             );
         }
 
         if (from.isAfter(to)) {
-            throw new IllegalArgumentException(
-                    "분석 시작일은 종료일보다 늦을 수 없습니다."
+            throw new BusinessException(
+                    AnalysisErrorCode.INVALID_DATE_RANGE
             );
         }
     }
@@ -535,9 +539,7 @@ public class CommitConsistencyService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -546,8 +548,8 @@ public class CommitConsistencyService {
                         user
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }

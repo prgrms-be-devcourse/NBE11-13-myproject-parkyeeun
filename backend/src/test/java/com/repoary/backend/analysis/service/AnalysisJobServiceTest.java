@@ -1,10 +1,18 @@
 package com.repoary.backend.analysis.service;
 
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.common.exception.CommonErrorCode;
+import com.repoary.backend.common.exception.ExternalSystemException;
 import com.repoary.backend.analysis.domain.AnalysisJob;
 import com.repoary.backend.analysis.domain.AnalysisJobStatus;
+import com.repoary.backend.analysis.exception.AnalysisErrorCode;
+import com.repoary.backend.analysis.dto.AnalysisJobResponse;
+import com.repoary.backend.analysis.dto.AnalysisJobSummaryResponse;
 import com.repoary.backend.analysis.dto.StoredAnalysisResult;
 import com.repoary.backend.analysis.repository.AnalysisJobRepository;
+import com.repoary.backend.github.exception.GitHubErrorCode;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.user.domain.User;
 import com.repoary.backend.user.repository.UserRepository;
@@ -215,48 +223,60 @@ class AnalysisJobServiceTest {
     @Test
     @DisplayName("분석 중 오류가 발생하면 FAILED 상태로 저장하고 예외를 다시 던진다")
     void failAnalysisJob() {
-        LocalDate targetDate = LocalDate.of(2026, 7, 29);
-
-        when(
-                commitAnalysisService.analyzeCommits(
-                        1L,
-                        11L,
-                        targetDate
-                )
-        ).thenThrow(
-                new IllegalStateException(
-                        "GitHub API 호출에 실패했습니다."
-                )
+        IllegalStateException failure = new IllegalStateException(
+                "GitHub access token=secret-value"
         );
-
-        when(analysisJobRepository.findById(1L))
-                .thenAnswer(invocation -> {
-                    AnalysisJob savedJob =
-                            verifyAndGetLatestSavedJob();
-
-                    return Optional.of(savedJob);
-                });
-
-        assertThatThrownBy(() ->
-                analysisJobService.execute(
-                        1L,
-                        11L,
-                        targetDate
-                )
-        )
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("GitHub API 호출에 실패했습니다.");
-
-        AnalysisJob failedJob = verifyAndGetLatestSavedJob();
+        AnalysisJob failedJob = executeAndGetFailedJob(failure);
 
         assertThat(failedJob.getStatus())
                 .isEqualTo(AnalysisJobStatus.FAILED);
 
         assertThat(failedJob.getErrorMessage())
-                .isEqualTo("GitHub API 호출에 실패했습니다.");
+                .isEqualTo(CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage())
+                .doesNotContain("secret-value");
 
         assertThat(failedJob.getCompletedAt()).isNotNull();
         assertThat(failedJob.getResult()).isNull();
+
+        AnalysisJobResponse detail = AnalysisJobResponse.from(
+                failedJob,
+                jsonMapper
+        );
+        AnalysisJobSummaryResponse summary =
+                AnalysisJobSummaryResponse.from(failedJob);
+
+        assertThat(detail.errorMessage())
+                .doesNotContain("secret-value");
+        assertThat(summary.errorMessage())
+                .doesNotContain("secret-value");
+    }
+
+    @Test
+    @DisplayName("외부 시스템 오류는 ErrorCode의 안전한 메시지를 저장한다")
+    void storeSafeExternalSystemFailureMessage() {
+        ExternalSystemException failure = new ExternalSystemException(
+                GitHubErrorCode.INVALID_RESPONSE,
+                new IllegalStateException("token=secret-value")
+        );
+
+        AnalysisJob failedJob = executeAndGetFailedJob(failure);
+
+        assertThat(failedJob.getErrorMessage())
+                .isEqualTo(GitHubErrorCode.INVALID_RESPONSE.getMessage())
+                .doesNotContain("secret-value");
+    }
+
+    @Test
+    @DisplayName("비즈니스 오류는 ErrorCode의 안전한 메시지를 저장한다")
+    void storeSafeBusinessFailureMessage() {
+        BusinessException failure = new BusinessException(
+                AnalysisErrorCode.INVALID_DATE_RANGE
+        );
+
+        AnalysisJob failedJob = executeAndGetFailedJob(failure);
+
+        assertThat(failedJob.getErrorMessage())
+                .isEqualTo(AnalysisErrorCode.INVALID_DATE_RANGE.getMessage());
     }
 
     @Test
@@ -269,8 +289,15 @@ class AnalysisJobServiceTest {
                         null
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("분석 날짜는 필수입니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(AnalysisErrorCode.DATE_REQUIRED);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(400);
+                        }
+                );
 
         verifyNoInteractions(
                 userRepository,
@@ -299,8 +326,15 @@ class AnalysisJobServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("연결된 저장소를 찾을 수 없습니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(404);
+                        }
+                );
 
         verify(analysisJobRepository, never())
                 .saveAndFlush(any(AnalysisJob.class));
@@ -319,5 +353,28 @@ class AnalysisJobServiceTest {
                 captor.getAllValues();
 
         return savedJobs.get(savedJobs.size() - 1);
+    }
+
+    private AnalysisJob executeAndGetFailedJob(RuntimeException failure) {
+        LocalDate targetDate = LocalDate.of(2026, 7, 29);
+
+        when(commitAnalysisService.analyzeCommits(
+                1L,
+                11L,
+                targetDate
+        )).thenThrow(failure);
+
+        when(analysisJobRepository.findById(1L))
+                .thenAnswer(invocation -> Optional.of(
+                        verifyAndGetLatestSavedJob()
+                ));
+
+        assertThatThrownBy(() -> analysisJobService.execute(
+                1L,
+                11L,
+                targetDate
+        )).isSameAs(failure);
+
+        return verifyAndGetLatestSavedJob();
     }
 }

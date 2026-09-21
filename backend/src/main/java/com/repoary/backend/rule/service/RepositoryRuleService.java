@@ -1,7 +1,10 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.github.exception.GitHubErrorCode;
 import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
 import com.repoary.backend.rule.domain.ConventionRule;
@@ -10,6 +13,7 @@ import com.repoary.backend.rule.preset.DefaultRulePreset.ConventionRulePreset;
 import com.repoary.backend.rule.repository.ClassificationRuleRepository;
 import com.repoary.backend.rule.repository.ConventionRuleRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,9 +67,7 @@ public class RepositoryRuleService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         ConnectedRepository connectedRepository =
@@ -75,8 +77,8 @@ public class RepositoryRuleService {
                                 user
                         )
                         .orElseThrow(() ->
-                                new IllegalArgumentException(
-                                        "연결된 저장소를 찾을 수 없습니다."
+                                new BusinessException(
+                                        RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                                 )
                         );
 
@@ -168,9 +170,7 @@ public class RepositoryRuleService {
 
     private void validateGitHubAccessToken(String accessToken) {
         if (accessToken == null || accessToken.isBlank()) {
-            throw new IllegalStateException(
-                    "GitHub access token을 찾을 수 없습니다."
-            );
+            throw new BusinessException(GitHubErrorCode.ACCESS_TOKEN_MISSING);
         }
     }
 

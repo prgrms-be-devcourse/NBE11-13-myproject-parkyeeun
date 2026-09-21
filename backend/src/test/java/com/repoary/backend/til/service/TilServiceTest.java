@@ -4,11 +4,12 @@ import com.repoary.backend.analysis.domain.AnalysisJob;
 import com.repoary.backend.analysis.domain.AnalysisJobStatus;
 import com.repoary.backend.analysis.dto.StoredAnalysisResult;
 import com.repoary.backend.analysis.repository.AnalysisJobRepository;
-import com.repoary.backend.common.exception.ConflictException;
-import com.repoary.backend.common.exception.NotFoundException;
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.til.domain.TilDocument;
+import com.repoary.backend.til.exception.TilErrorCode;
 import com.repoary.backend.til.repository.TilDocumentRepository;
 import com.repoary.backend.user.domain.User;
 import com.repoary.backend.user.repository.UserRepository;
@@ -195,9 +196,14 @@ class TilServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(ConflictException.class)
-                .hasMessage(
-                        "해당 날짜의 TIL이 이미 존재합니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(TilErrorCode.ALREADY_EXISTS);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(409);
+                        }
                 );
 
         verifyNoInteractions(
@@ -239,9 +245,10 @@ class TilServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "완료된 분석 결과를 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(TilErrorCode.COMPLETED_ANALYSIS_NOT_FOUND)
                 );
 
         verify(tilDocumentRepository, never())
@@ -277,6 +284,31 @@ class TilServiceTest {
     }
 
     @Test
+    @DisplayName("날짜에 해당하는 TIL이 없으면 404 오류 코드를 사용한다")
+    void rejectMissingTilByDate() {
+        LocalDate targetDate = LocalDate.of(2026, 8, 28);
+        when(tilDocumentRepository
+                .findByConnectedRepositoryAndTargetDate(
+                        connectedRepository,
+                        targetDate
+                )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tilService.getByDate(
+                1L,
+                11L,
+                targetDate
+        )).isInstanceOfSatisfying(
+                BusinessException.class,
+                exception -> {
+                    assertThat(exception.getErrorCode())
+                            .isEqualTo(TilErrorCode.NOT_FOUND);
+                    assertThat(exception.getErrorCode().getHttpStatus().value())
+                            .isEqualTo(404);
+                }
+        );
+    }
+
+    @Test
     @DisplayName("TIL 문서 ID로 상세 조회한다")
     void getDocument() {
         TilDocument tilDocument =
@@ -299,6 +331,29 @@ class TilServiceTest {
 
         assertThat(result)
                 .isEqualTo(tilDocument);
+    }
+
+    @Test
+    @DisplayName("TIL 문서가 없으면 404 오류 코드를 사용한다")
+    void rejectMissingTilDocument() {
+        when(tilDocumentRepository.findByIdAndConnectedRepository(
+                31L,
+                connectedRepository
+        )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tilService.getDocument(
+                1L,
+                11L,
+                31L
+        )).isInstanceOfSatisfying(
+                BusinessException.class,
+                exception -> {
+                    assertThat(exception.getErrorCode())
+                            .isEqualTo(TilErrorCode.NOT_FOUND);
+                    assertThat(exception.getErrorCode().getHttpStatus().value())
+                            .isEqualTo(404);
+                }
+        );
     }
 
     @Test
@@ -356,9 +411,14 @@ class TilServiceTest {
                         targetDate
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "연결된 저장소를 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND);
+                            assertThat(exception.getErrorCode().getHttpStatus().value())
+                                    .isEqualTo(404);
+                        }
                 );
 
         verifyNoInteractions(
@@ -385,9 +445,10 @@ class TilServiceTest {
                         31L
                 )
         )
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(
-                        "연결된 저장소를 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND)
                 );
 
         verify(

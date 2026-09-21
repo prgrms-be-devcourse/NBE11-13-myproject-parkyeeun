@@ -1,5 +1,6 @@
 package com.repoary.backend.rule.service;
 
+import com.repoary.backend.common.exception.BusinessException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.rule.domain.ClassificationRule;
@@ -278,7 +279,7 @@ class RepositoryRuleQueryServiceTest {
                         11L
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage("사용자를 찾을 수 없습니다.");
 
         verify(connectedRepositoryRepository, never())
@@ -310,7 +311,7 @@ class RepositoryRuleQueryServiceTest {
                         11L
                 )
         )
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(BusinessException.class)
                 .hasMessage("연결된 저장소를 찾을 수 없습니다.");
 
         verify(conventionRuleRepository, never())

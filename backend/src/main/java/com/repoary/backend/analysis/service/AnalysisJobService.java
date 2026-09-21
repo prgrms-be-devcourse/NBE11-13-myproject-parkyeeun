@@ -6,17 +6,29 @@ import com.repoary.backend.analysis.domain.AnalysisJob;
 import com.repoary.backend.analysis.dto.CommitAnalysisResponse;
 import com.repoary.backend.analysis.dto.StoredAnalysisResult;
 import com.repoary.backend.analysis.repository.AnalysisJobRepository;
+import com.repoary.backend.analysis.exception.AnalysisErrorCode;
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.common.exception.CommonErrorCode;
+import com.repoary.backend.common.exception.ExternalSystemException;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.user.domain.User;
+import com.repoary.backend.user.exception.UserErrorCode;
 import com.repoary.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.util.List;
 
 @Service
 public class AnalysisJobService {
+
+    private static final Logger log = LoggerFactory.getLogger(
+            AnalysisJobService.class
+    );
 
     private final AnalysisJobRepository analysisJobRepository;
     private final CommitAnalysisService commitAnalysisService;
@@ -47,7 +59,7 @@ public class AnalysisJobService {
             LocalDate targetDate
     ) {
         if (targetDate == null) {
-            throw new IllegalArgumentException("분석 날짜는 필수입니다.");
+            throw new BusinessException(AnalysisErrorCode.DATE_REQUIRED);
         }
 
         ConnectedRepository connectedRepository =
@@ -94,12 +106,33 @@ public class AnalysisJobService {
 
             if (failedJob != null
                     && failedJob.getStatus() == AnalysisJobStatus.RUNNING) {
-                failedJob.fail(exception.getMessage());
+                failedJob.fail(getSafeFailureMessage(exception));
                 analysisJobRepository.saveAndFlush(failedJob);
             }
 
+            log.error(
+                    "Analysis job failed. jobId={}, exceptionType={}, causeType={}",
+                    analysisJob.getId(),
+                    exception.getClass().getName(),
+                    exception.getCause() == null
+                            ? "none"
+                            : exception.getCause().getClass().getName()
+            );
+
             throw exception;
         }
+    }
+
+    private String getSafeFailureMessage(Exception exception) {
+        if (exception instanceof BusinessException businessException) {
+            return businessException.getErrorCode().getMessage();
+        }
+
+        if (exception instanceof ExternalSystemException externalException) {
+            return externalException.getErrorCode().getMessage();
+        }
+
+        return CommonErrorCode.INTERNAL_SERVER_ERROR.getMessage();
     }
 
     private ConnectedRepository getOwnedConnectedRepository(
@@ -108,9 +141,7 @@ public class AnalysisJobService {
     ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "사용자를 찾을 수 없습니다."
-                        )
+                        new BusinessException(UserErrorCode.USER_NOT_FOUND)
                 );
 
         return connectedRepositoryRepository
@@ -119,8 +150,8 @@ public class AnalysisJobService {
                         user
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "연결된 저장소를 찾을 수 없습니다."
+                        new BusinessException(
+                                RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
                         )
                 );
     }
@@ -142,9 +173,7 @@ public class AnalysisJobService {
                         connectedRepository
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "분석 작업을 찾을 수 없습니다."
-                        )
+                        new BusinessException(AnalysisErrorCode.JOB_NOT_FOUND)
                 );
     }
 

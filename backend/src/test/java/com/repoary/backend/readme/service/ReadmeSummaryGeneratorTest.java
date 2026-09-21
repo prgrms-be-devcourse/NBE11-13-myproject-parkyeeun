@@ -1,5 +1,7 @@
 package com.repoary.backend.readme.service;
 
+import com.repoary.backend.common.exception.BusinessException;
+import com.repoary.backend.readme.exception.ReadmeErrorCode;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,9 +125,10 @@ class ReadmeSummaryGeneratorTest {
         assertThatThrownBy(
                 () -> generator.generate(tilContent)
         )
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage(
-                        "TIL의 오늘 학습 정리 내용을 찾을 수 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ReadmeErrorCode.INVALID_TIL_FORMAT)
                 );
     }
 
@@ -144,9 +147,10 @@ class ReadmeSummaryGeneratorTest {
         assertThatThrownBy(
                 () -> generator.generate(tilContent)
         )
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage(
-                        "README Summary로 변환할 학습 내용이 없습니다."
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ReadmeErrorCode.INVALID_TIL_FORMAT)
                 );
     }
 
@@ -155,7 +159,10 @@ class ReadmeSummaryGeneratorTest {
         assertThatThrownBy(
                 () -> generator.generate(" ")
         )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("TIL 내용은 필수입니다.");
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ReadmeErrorCode.INVALID_TIL_FORMAT)
+                );
     }
 }
