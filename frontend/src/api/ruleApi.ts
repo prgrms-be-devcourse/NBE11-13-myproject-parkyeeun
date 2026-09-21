@@ -41,7 +41,7 @@ const requestJson = async <T>(
 ): Promise<T> => {
   const response = await fetch(url, options);
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(
@@ -59,7 +59,7 @@ const requestNoContent = async (
 ): Promise<void> => {
   const response = await fetch(url, options);
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(

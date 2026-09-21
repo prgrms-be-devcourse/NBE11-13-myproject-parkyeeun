@@ -39,7 +39,7 @@ export const generateReadmeRow = async (
     },
   );
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));

@@ -51,7 +51,7 @@ export const analyzeCommitConsistency = async (
     },
   );
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error(

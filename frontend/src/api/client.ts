@@ -58,10 +58,44 @@ export const clearAuthenticationStorage = () => {
   localStorage.removeItem(SELECTED_REPOSITORY_KEY);
 };
 
-export const handleAuthenticationFailure = (
+const REPOARY_AUTHENTICATION_FAILURE_CODES = new Set([
+  "AUTH_AUTHENTICATION_REQUIRED",
+  "AUTH_INVALID_AUTHORIZATION_HEADER",
+  "AUTH_JWT_MALFORMED",
+  "AUTH_JWT_INVALID_SIGNATURE",
+  "AUTH_JWT_EXPIRED",
+  "AUTH_JWT_INVALID_PAYLOAD",
+]);
+
+export const handleAuthenticationFailure = async (
   response: Response,
 ) => {
-  if (response.status !== 401 && response.status !== 403) {
+  if (response.status !== 401) {
+    return false;
+  }
+
+  let errorCode: string | null = null;
+
+  try {
+    const data: unknown = await response.clone().json();
+
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      "code" in data &&
+      typeof data.code === "string" &&
+      data.code.trim()
+    ) {
+      errorCode = data.code;
+    }
+  } catch {
+    // A body-less or non-JSON 401 still falls back to the existing auth protection.
+  }
+
+  if (
+    errorCode !== null &&
+    !REPOARY_AUTHENTICATION_FAILURE_CODES.has(errorCode)
+  ) {
     return false;
   }
 
@@ -95,7 +129,7 @@ export const fetchMe = async () => {
     headers: authHeaders(),
   });
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error("사용자 정보 조회에 실패했습니다.");
@@ -110,7 +144,7 @@ export const fetchGitHubRepositories = async () => {
     headers: authHeaders(),
   });
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error("GitHub 저장소 목록 조회에 실패했습니다.");
@@ -137,7 +171,7 @@ export const connectRepository = async (repository: GitHubRepository) => {
     }),
   });
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error("저장소 연결에 실패했습니다.");
@@ -152,7 +186,7 @@ export const fetchConnectedRepositories = async () => {
     headers: authHeaders(),
   });
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error("연결된 저장소 목록 조회에 실패했습니다.");
@@ -171,7 +205,7 @@ export const disconnectRepository = async (githubRepositoryId: number) => {
     }
   );
 
-  handleAuthenticationFailure(response);
+  await handleAuthenticationFailure(response);
 
   if (!response.ok) {
     throw new Error("저장소 연결 해제에 실패했습니다.");
