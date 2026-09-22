@@ -27,8 +27,12 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,6 +50,8 @@ public class RecordCheckService {
 
     private static final Pattern COMMIT_DATE_PATTERN =
             Pattern.compile("\\b(\\d{4}-\\d{2}-\\d{2})\\b");
+
+    private static final int GITHUB_DIRECTORY_ITEM_LIMIT = 1_000;
 
     private final UserRepository userRepository;
     private final ConnectedRepositoryRepository connectedRepositoryRepository;
@@ -97,13 +103,20 @@ public class RecordCheckService {
                         month
                 );
 
+        Set<LocalDate> existingTilDates =
+                getExistingTilDates(
+                        context,
+                        month,
+                        targetDates
+                );
+
         List<RecordCheckItemResponse> items =
                 targetDates.stream()
                         .map(targetDate ->
                                 createItem(
-                                        context,
                                         targetDate,
-                                        readmeContent
+                                        readmeContent,
+                                        existingTilDates
                                 )
                         )
                         .toList();
@@ -238,15 +251,12 @@ public class RecordCheckService {
     }
 
     private RecordCheckItemResponse createItem(
-            RepositoryContext context,
             LocalDate targetDate,
-            String readmeContent
+            String readmeContent,
+            Set<LocalDate> existingTilDates
     ) {
         boolean tilExists =
-                existsTilFile(
-                        context,
-                        targetDate
-                );
+                existingTilDates.contains(targetDate);
 
         boolean readmeEntryExists =
                 containsReadmeEntry(
@@ -259,6 +269,126 @@ public class RecordCheckService {
                 tilExists,
                 readmeEntryExists
         );
+    }
+
+    private Set<LocalDate> getExistingTilDates(
+            RepositoryContext context,
+            YearMonth month,
+            List<LocalDate> targetDates
+    ) {
+        String directoryPath = "til/" + month;
+
+        Optional<List<GitHubContentResponse>> directoryContents =
+                gitHubApiClient.getDirectoryContents(
+                        context.user().getGithubAccessToken(),
+                        context.owner(),
+                        context.repositoryName(),
+                        context.repository().getDefaultBranch(),
+                        directoryPath
+                );
+
+        if (directoryContents.isEmpty()) {
+            return Set.of();
+        }
+
+        List<GitHubContentResponse> entries = directoryContents.get();
+        if (requiresPerFileFallback(entries, month, targetDates)) {
+            return getExistingTilDatesByFile(
+                    context,
+                    targetDates
+            );
+        }
+
+        Map<String, LocalDate> expectedDatesByPath =
+                expectedDatesByPath(month, targetDates);
+        Set<LocalDate> existingDates = new HashSet<>();
+
+        for (GitHubContentResponse entry : entries) {
+            LocalDate targetDate = expectedDatesByPath.get(entry.path());
+            if (targetDate != null) {
+                existingDates.add(targetDate);
+            }
+        }
+
+        return Set.copyOf(existingDates);
+    }
+
+    private boolean requiresPerFileFallback(
+            List<GitHubContentResponse> entries,
+            YearMonth month,
+            List<LocalDate> targetDates
+    ) {
+        if (entries.size() >= GITHUB_DIRECTORY_ITEM_LIMIT) {
+            return true;
+        }
+
+        Map<String, LocalDate> expectedDatesByPath =
+                expectedDatesByPath(month, targetDates);
+        Set<String> expectedNames = new HashSet<>();
+        expectedDatesByPath.keySet().forEach(path ->
+                expectedNames.add(path.substring(path.lastIndexOf('/') + 1))
+        );
+        Set<String> matchedPaths = new HashSet<>();
+
+        for (GitHubContentResponse entry : entries) {
+            if (entry == null
+                    || entry.name() == null
+                    || entry.name().isBlank()
+                    || entry.path() == null
+                    || entry.path().isBlank()
+                    || entry.type() == null
+                    || entry.type().isBlank()) {
+                return true;
+            }
+
+            boolean expectedName = expectedNames.contains(entry.name());
+            boolean expectedPath = expectedDatesByPath.containsKey(entry.path());
+
+            if (expectedName != expectedPath) {
+                return true;
+            }
+
+            if (expectedPath) {
+                if (!"file".equals(entry.type())
+                        || !entry.path().endsWith("/" + entry.name())
+                        || !matchedPaths.add(entry.path())) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private Map<String, LocalDate> expectedDatesByPath(
+            YearMonth month,
+            List<LocalDate> targetDates
+    ) {
+        Map<String, LocalDate> datesByPath = new HashMap<>();
+        for (LocalDate targetDate : targetDates) {
+            datesByPath.put(
+                    String.format(
+                            "til/%s/%s.md",
+                            month,
+                            targetDate
+                    ),
+                    targetDate
+            );
+        }
+        return datesByPath;
+    }
+
+    private Set<LocalDate> getExistingTilDatesByFile(
+            RepositoryContext context,
+            List<LocalDate> targetDates
+    ) {
+        Set<LocalDate> existingDates = new HashSet<>();
+        for (LocalDate targetDate : targetDates) {
+            if (existsTilFile(context, targetDate)) {
+                existingDates.add(targetDate);
+            }
+        }
+        return Set.copyOf(existingDates);
     }
 
     private boolean existsTilFile(

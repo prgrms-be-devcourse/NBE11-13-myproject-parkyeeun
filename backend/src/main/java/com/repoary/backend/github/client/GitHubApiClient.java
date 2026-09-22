@@ -218,6 +218,38 @@ public class GitHubApiClient {
         }
     }
 
+    public Optional<List<GitHubContentResponse>> getDirectoryContents(
+            String accessToken,
+            String owner,
+            String repositoryName,
+            String defaultBranch,
+            String path
+    ) {
+        try {
+            List<GitHubContentResponse> response = execute(() -> restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/repos/{owner}/{repository}/contents/")
+                            .path(path)
+                            .queryParam("ref", defaultBranch)
+                            .build(owner, repositoryName))
+                    .headers(headers ->
+                            setGitHubHeaders(headers, accessToken))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {
+                    }));
+
+            if (response == null) {
+                throw invalidResponse();
+            }
+            return Optional.of(response);
+        } catch (ExternalSystemException exception) {
+            if (exception.getErrorCode() == GitHubErrorCode.RESOURCE_NOT_FOUND) {
+                return Optional.empty();
+            }
+            throw exception;
+        }
+    }
+
     private <T> T execute(Supplier<T> request) {
         try {
             return request.get();

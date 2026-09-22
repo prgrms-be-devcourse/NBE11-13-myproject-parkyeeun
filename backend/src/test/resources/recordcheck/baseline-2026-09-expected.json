@@ -1,0 +1,60 @@
+{
+  "month": "2026-09",
+  "items": [
+    {
+      "date": "2026-09-01",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-02",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-03",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-04",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-06",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-07",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-08",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-09",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-10",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-21",
+      "tilExists": true,
+      "readmeEntryExists": true
+    },
+    {
+      "date": "2026-09-22",
+      "tilExists": false,
+      "readmeEntryExists": false
+    }
+  ]
+}

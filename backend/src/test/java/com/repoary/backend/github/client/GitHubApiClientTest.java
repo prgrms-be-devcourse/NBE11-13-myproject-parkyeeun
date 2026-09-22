@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -71,6 +72,102 @@ class GitHubApiClientTest {
                 ExternalSystemException.class,
                 exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(GitHubErrorCode.INVALID_RESPONSE)
+        );
+    }
+
+    @Test
+    @DisplayName("월 디렉터리 응답을 항목 목록으로 조회한다")
+    void directoryContentsAreReturnedAsList() {
+        server.expect(requestTo(
+                        "https://api.github.test/repos/owner/repository/contents/til/2026-09?ref=main"
+                ))
+                .andRespond(withSuccess(
+                        """
+                                [
+                                  {
+                                    "name": "2026-09-21.md",
+                                    "path": "til/2026-09/2026-09-21.md",
+                                    "type": "file"
+                                  }
+                                ]
+                                """,
+                        MediaType.APPLICATION_JSON
+                ));
+
+        List<com.repoary.backend.github.dto.GitHubContentResponse> contents =
+                gitHubApiClient.getDirectoryContents(
+                                "token",
+                                "owner",
+                                "repository",
+                                "main",
+                                "til/2026-09"
+                        )
+                        .orElseThrow();
+
+        assertThat(contents).hasSize(1);
+        assertThat(contents.get(0).name()).isEqualTo("2026-09-21.md");
+        assertThat(contents.get(0).path())
+                .isEqualTo("til/2026-09/2026-09-21.md");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("월 디렉터리 404는 빈 Optional로 처리한다")
+    void directoryNotFoundReturnsEmpty() {
+        server.expect(requestTo(
+                        "https://api.github.test/repos/owner/repository/contents/til/2026-09?ref=main"
+                ))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(gitHubApiClient.getDirectoryContents(
+                "token",
+                "owner",
+                "repository",
+                "main",
+                "til/2026-09"
+        )).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("성공 상태의 null 디렉터리 응답은 잘못된 외부 응답이다")
+    void nullDirectoryResponseIsInvalidResponse() {
+        server.expect(requestTo(
+                        "https://api.github.test/repos/owner/repository/contents/til/2026-09?ref=main"
+                ))
+                .andRespond(withSuccess());
+
+        assertThatThrownBy(() -> gitHubApiClient.getDirectoryContents(
+                "token",
+                "owner",
+                "repository",
+                "main",
+                "til/2026-09"
+        )).isInstanceOfSatisfying(
+                ExternalSystemException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(GitHubErrorCode.INVALID_RESPONSE)
+        );
+    }
+
+    @Test
+    @DisplayName("월 디렉터리의 인증·권한·요청 제한·서버 오류 매핑을 유지한다")
+    void directoryErrorsKeepExistingMapping() {
+        assertDirectoryError(
+                HttpStatus.UNAUTHORIZED,
+                GitHubErrorCode.AUTHENTICATION_FAILED
+        );
+        assertDirectoryError(
+                HttpStatus.FORBIDDEN,
+                GitHubErrorCode.ACCESS_DENIED
+        );
+        assertDirectoryError(
+                HttpStatus.TOO_MANY_REQUESTS,
+                GitHubErrorCode.RATE_LIMIT_EXCEEDED
+        );
+        assertDirectoryError(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                GitHubErrorCode.API_UNAVAILABLE
         );
     }
 
@@ -182,5 +279,34 @@ class GitHubApiClientTest {
                 });
 
         return new GitHubApiClient(builder);
+    }
+
+    private void assertDirectoryError(
+            HttpStatus status,
+            GitHubErrorCode expectedErrorCode
+    ) {
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl("https://api.github.test");
+        MockRestServiceServer errorServer =
+                MockRestServiceServer.bindTo(builder).build();
+        GitHubApiClient client = new GitHubApiClient(builder);
+
+        errorServer.expect(requestTo(
+                        "https://api.github.test/repos/owner/repository/contents/til/2026-09?ref=main"
+                ))
+                .andRespond(withStatus(status));
+
+        assertThatThrownBy(() -> client.getDirectoryContents(
+                "token",
+                "owner",
+                "repository",
+                "main",
+                "til/2026-09"
+        )).isInstanceOfSatisfying(
+                ExternalSystemException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(expectedErrorCode)
+        );
+        errorServer.verify();
     }
 }

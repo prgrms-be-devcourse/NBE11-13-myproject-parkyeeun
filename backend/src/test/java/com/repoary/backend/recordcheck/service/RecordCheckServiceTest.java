@@ -6,10 +6,10 @@ import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.dto.GitHubContentResponse;
 import com.repoary.backend.github.exception.GitHubErrorCode;
-import com.repoary.backend.recordcheck.exception.RecordCheckErrorCode;
-import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.recordcheck.dto.RecordCheckResponse;
+import com.repoary.backend.recordcheck.exception.RecordCheckErrorCode;
 import com.repoary.backend.repository.domain.ConnectedRepository;
+import com.repoary.backend.repository.exception.RepositoryErrorCode;
 import com.repoary.backend.repository.repository.ConnectedRepositoryRepository;
 import com.repoary.backend.user.domain.User;
 import com.repoary.backend.user.repository.UserRepository;
@@ -26,26 +26,31 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class RecordCheckServiceTest {
 
-    private static final ZoneId KST =
-            ZoneId.of("Asia/Seoul");
-
-    private static final LocalTime DAY_BOUNDARY =
-            LocalTime.of(6, 0);
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final LocalTime DAY_BOUNDARY = LocalTime.of(6, 0);
+    private static final Long USER_ID = 1L;
+    private static final Long CONNECTED_REPOSITORY_ID = 10L;
+    private static final YearMonth SEPTEMBER = YearMonth.of(2026, 9);
 
     @Mock
     private UserRepository userRepository;
@@ -69,615 +74,488 @@ class RecordCheckServiceTest {
     }
 
     @Test
-    void 실제_GitHub_커밋이_있는_날짜의_TIL과_README_반영_여부를_점검한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
+    void 월_디렉터리를_한_번_조회하고_날짜별_TIL은_조회하지_않는다() {
+        LocalDate first = LocalDate.of(2026, 9, 9);
+        LocalDate second = LocalDate.of(2026, 9, 10);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(kotlin): 2026-09-09 컬렉션", first),
+                commit("study(kotlin): 2026-09-10 게시판", second)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of(second)));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                tilEntry(second)
+        )));
 
-        LocalDate september9 =
-                LocalDate.of(2026, 9, 9);
+        RecordCheckResponse response = check(SEPTEMBER);
 
-        LocalDate september10 =
-                LocalDate.of(2026, 9, 10);
-
-        GitHubCommitResponse commit9 =
-                commit(
-                        "study(kotlin): 2026-09-09 컬렉션 실습",
-                        september9
-                                .atTime(15, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        GitHubCommitResponse commit10 =
-                commit(
-                        "study(kotlin): 2026-09-10 게시판 실습",
-                        september10
-                                .atTime(15, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
-        );
-
-        givenMonthlyCommits(
-                month,
-                List.of(commit9, commit10)
-        );
-
-        String readme = """
-                ## Week 2 (2026-09-07 ~ 2026-09-13)
-
-                | Date | Summary |
-                | --- | --- |
-                | [2026-09-10](./2026-09-10.md) | Kotlin 게시판 실습 |
-                """;
-
-        givenMonthlyReadme(
-                month,
-                Optional.of(
-                        new GitHubContentResponse(
-                                "README.md",
-                                "til/2026-09/README.md",
-                                "file",
-                                encode(readme),
-                                "base64"
-                        )
-                )
-        );
-
-        givenTilFile(
-                september9,
-                Optional.empty()
-        );
-
-        givenTilFile(
-                september10,
-                Optional.of(
-                        new GitHubContentResponse(
-                                "2026-09-10.md",
-                                "til/2026-09/2026-09-10.md",
-                                "file",
-                                null,
-                                null
-                        )
-                )
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.month())
-                .isEqualTo(month);
-
-        assertThat(response.items())
-                .hasSize(2);
-
-        assertThat(response.items().get(0).date())
-                .isEqualTo(september9);
-
-        assertThat(response.items().get(0).tilExists())
-                .isFalse();
-
-        assertThat(response.items().get(0).readmeEntryExists())
-                .isFalse();
-
-        assertThat(response.items().get(1).date())
-                .isEqualTo(september10);
-
-        assertThat(response.items().get(1).tilExists())
-                .isTrue();
-
-        assertThat(response.items().get(1).readmeEntryExists())
-                .isTrue();
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items().get(0).tilExists()).isFalse();
+        assertThat(response.items().get(0).readmeEntryExists()).isFalse();
+        assertThat(response.items().get(1).tilExists()).isTrue();
+        assertThat(response.items().get(1).readmeEntryExists()).isTrue();
+        verifyDirectoryOnce(SEPTEMBER);
+        verifyNoPerFileTilLookup();
     }
 
     @Test
-    void 같은_날짜에_커밋이_여러_개여도_한_번만_점검한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
+    void 월_디렉터리의_모든_TIL을_존재로_판정한다() {
+        LocalDate first = LocalDate.of(2026, 9, 1);
+        LocalDate second = LocalDate.of(2026, 9, 2);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", first),
+                commit("study(java): 2026-09-02", second)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of(first, second)));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                tilEntry(first),
+                tilEntry(second)
+        )));
 
-        LocalDate targetDate =
-                LocalDate.of(2026, 9, 10);
-
-        GitHubCommitResponse first =
-                commit(
-                        "study(kotlin): 2026-09-10 게시판 실습",
-                        targetDate
-                                .atTime(10, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        GitHubCommitResponse second =
-                commit(
-                        "study(kotlin): 2026-09-10 컬렉션 실습",
-                        targetDate
-                                .atTime(18, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
-        );
-
-        givenMonthlyCommits(
-                month,
-                List.of(first, second)
-        );
-
-        givenMonthlyReadme(
-                month,
-                Optional.empty()
-        );
-
-        givenTilFile(
-                targetDate,
-                Optional.empty()
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
+        RecordCheckResponse response = check(SEPTEMBER);
 
         assertThat(response.items())
-                .hasSize(1);
-
-        assertThat(response.items().get(0).date())
-                .isEqualTo(targetDate);
+                .allSatisfy(item -> {
+                    assertThat(item.tilExists()).isTrue();
+                    assertThat(item.readmeEntryExists()).isTrue();
+                });
+        verifyNoPerFileTilLookup();
     }
 
     @Test
-    void TIL_작성_커밋만_있는_날짜는_점검_대상에서_제외한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
+    void 빈_월_디렉터리는_모든_TIL을_누락으로_판정한다() {
+        LocalDate first = LocalDate.of(2026, 9, 1);
+        LocalDate second = LocalDate.of(2026, 9, 2);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", first),
+                commit("study(java): 2026-09-02", second)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of(first, second)));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
 
-        GitHubCommitResponse tilCommit =
+        RecordCheckResponse response = check(SEPTEMBER);
+
+        assertThat(response.items())
+                .allSatisfy(item -> assertThat(item.tilExists()).isFalse());
+        verifyNoPerFileTilLookup();
+    }
+
+    @Test
+    void 월_디렉터리_404는_모든_TIL을_누락으로_판정한다() {
+        LocalDate date = LocalDate.of(2026, 9, 22);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-22", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.empty());
+
+        RecordCheckResponse response = check(SEPTEMBER);
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.tilExists()).isFalse();
+            assertThat(item.readmeEntryExists()).isFalse();
+        });
+        verifyNoPerFileTilLookup();
+    }
+
+    @Test
+    void README가_없어도_월_디렉터리의_TIL은_존재로_판정한다() {
+        LocalDate date = LocalDate.of(2026, 9, 10);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-10", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, Optional.empty());
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                tilEntry(date)
+        )));
+
+        RecordCheckResponse response = check(SEPTEMBER);
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.tilExists()).isTrue();
+            assertThat(item.readmeEntryExists()).isFalse();
+        });
+    }
+
+    @Test
+    void 점검_대상_날짜가_없으면_README와_월_디렉터리를_조회하지_않는다() {
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of());
+
+        assertThat(check(SEPTEMBER).items()).isEmpty();
+
+        verify(gitHubApiClient, never()).getContent(
+                anyString(), anyString(), anyString(), anyString(), anyString()
+        );
+        verify(gitHubApiClient, never()).getDirectoryContents(
+                anyString(), anyString(), anyString(), anyString(), anyString()
+        );
+    }
+
+    @Test
+    void 다른_날짜와_유사한_파일명을_TIL로_오인하지_않는다() {
+        LocalDate date = LocalDate.of(2026, 9, 1);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                entry(
+                        "2026-09-01-copy.md",
+                        "til/2026-09/2026-09-01-copy.md",
+                        "file"
+                ),
+                entry(
+                        "2026-09-11.md",
+                        "til/2026-09/2026-09-11.md",
+                        "file"
+                )
+        )));
+
+        RecordCheckResponse response = check(SEPTEMBER);
+
+        assertThat(response.items().get(0).tilExists()).isFalse();
+        verifyNoPerFileTilLookup();
+    }
+
+    @Test
+    void 디렉터리_항목이_1000개이면_날짜별_조회로_fallback한다() {
+        LocalDate exists = LocalDate.of(2026, 9, 1);
+        LocalDate missing = LocalDate.of(2026, 9, 2);
+        List<GitHubContentResponse> entries = IntStream.range(0, 1_000)
+                .mapToObj(index -> entry(
+                        "other-" + index + ".md",
+                        "til/2026-09/other-" + index + ".md",
+                        "file"
+                ))
+                .toList();
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", exists),
+                commit("study(java): 2026-09-02", missing)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(entries));
+        givenTilFile(exists, Optional.of(tilEntry(exists)));
+        givenTilFile(missing, Optional.empty());
+
+        RecordCheckResponse response = check(SEPTEMBER);
+
+        assertThat(response.items().get(0).tilExists()).isTrue();
+        assertThat(response.items().get(1).tilExists()).isFalse();
+        verifyPerFileTilLookups(2);
+    }
+
+    @Test
+    void 대상_항목의_타입이_모호하면_날짜별_조회로_fallback한다() {
+        LocalDate date = LocalDate.of(2026, 9, 1);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                entry(
+                        "2026-09-01.md",
+                        "til/2026-09/2026-09-01.md",
+                        "symlink"
+                )
+        )));
+        givenTilFile(date, Optional.of(tilEntry(date)));
+
+        assertThat(check(SEPTEMBER).items().get(0).tilExists()).isTrue();
+        verifyPerFileTilLookups(1);
+    }
+
+    @Test
+    void null_디렉터리_항목은_빈_목록으로_오인하지_않고_fallback한다() {
+        LocalDate date = LocalDate.of(2026, 9, 1);
+        List<GitHubContentResponse> entries = new ArrayList<>();
+        entries.add(null);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(entries));
+        givenTilFile(date, Optional.empty());
+
+        assertThat(check(SEPTEMBER).items().get(0).tilExists()).isFalse();
+        verifyPerFileTilLookups(1);
+    }
+
+    @Test
+    void 대상_파일의_name과_path가_불일치하면_fallback한다() {
+        LocalDate date = LocalDate.of(2026, 9, 1);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-01", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of(
+                entry(
+                        "2026-09-01.md",
+                        "til/other/2026-09-01.md",
+                        "file"
+                )
+        )));
+        givenTilFile(date, Optional.empty());
+
+        check(SEPTEMBER);
+
+        verifyPerFileTilLookups(1);
+    }
+
+    @Test
+    void 같은_날짜에_커밋이_여러_개여도_한_번만_판정한다() {
+        LocalDate date = LocalDate.of(2026, 9, 10);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(kotlin): 2026-09-10 첫 번째", date),
+                commit("study(kotlin): 2026-09-10 두 번째", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
+
+        assertThat(check(SEPTEMBER).items()).hasSize(1);
+    }
+
+    @Test
+    void TIL_작성_커밋만_있으면_점검_대상에서_제외한다() {
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
                 commit(
                         "docs(til): 2026-09-10 TIL 작성",
                         LocalDate.of(2026, 9, 10)
-                                .atTime(23, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
+                )
+        ));
 
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
-        );
-
-        givenMonthlyCommits(
-                month,
-                List.of(tilCommit)
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.items())
-                .isEmpty();
-
-        verify(
-                gitHubApiClient,
-                never()
-        ).getContent(
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString()
+        assertThat(check(SEPTEMBER).items()).isEmpty();
+        verify(gitHubApiClient, never()).getDirectoryContents(
+                anyString(), anyString(), anyString(), anyString(), anyString()
         );
     }
 
     @Test
     void 새벽_6시_이전_커밋은_전날_학습으로_처리한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
-
-        LocalDate learningDate =
-                LocalDate.of(2026, 9, 9);
-
-        GitHubCommitResponse commit =
-                commit(
-                        "study(kotlin): 컬렉션 실습",
-                        LocalDate.of(2026, 9, 10)
-                                .atTime(2, 30)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
+        LocalDate learningDate = LocalDate.of(2026, 9, 9);
+        GitHubCommitResponse commit = commit(
+                "study(kotlin): 컬렉션",
+                LocalDate.of(2026, 9, 10)
+                        .atTime(2, 30)
+                        .atZone(KST)
+                        .toInstant()
         );
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(commit));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
 
-        givenMonthlyCommits(
-                month,
-                List.of(commit)
-        );
-
-        givenMonthlyReadme(
-                month,
-                Optional.empty()
-        );
-
-        givenTilFile(
-                learningDate,
-                Optional.empty()
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.items())
-                .hasSize(1);
-
-        assertThat(response.items().get(0).date())
+        assertThat(check(SEPTEMBER).items().get(0).date())
                 .isEqualTo(learningDate);
     }
 
     @Test
-    void README_파일이_없으면_README_행을_누락으로_처리한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
-
-        LocalDate targetDate =
-                LocalDate.of(2026, 9, 10);
-
-        GitHubCommitResponse commit =
-                commit(
-                        "study(kotlin): 2026-09-10 게시판 실습",
-                        targetDate
-                                .atTime(15, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
+    void 실제_커밋_시각보다_커밋_메시지의_학습_날짜를_우선한다() {
+        YearMonth august = YearMonth.of(2026, 8);
+        LocalDate learningDate = LocalDate.of(2026, 8, 31);
+        GitHubCommitResponse commit = commit(
+                "study(springboot): 2026-08-31 MSA",
+                LocalDate.of(2026, 9, 1)
+                        .atTime(15, 0)
+                        .atZone(KST)
+                        .toInstant()
         );
+        givenRepositoryContext();
+        givenMonthlyCommits(august, List.of(commit));
+        givenMonthlyReadme(august, readme(Set.of()));
+        givenMonthlyDirectory(august, Optional.of(List.of()));
 
-        givenMonthlyCommits(
-                month,
-                List.of(commit)
-        );
-
-        givenMonthlyReadme(
-                month,
-                Optional.empty()
-        );
-
-        givenTilFile(
-                targetDate,
-                Optional.of(
-                        new GitHubContentResponse(
-                                "2026-09-10.md",
-                                "til/2026-09/2026-09-10.md",
-                                "file",
-                                null,
-                                null
-                        )
-                )
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.items())
-                .hasSize(1);
-
-        assertThat(response.items().get(0).tilExists())
-                .isTrue();
-
-        assertThat(response.items().get(0).readmeEntryExists())
-                .isFalse();
+        assertThat(check(august).items().get(0).date())
+                .isEqualTo(learningDate);
     }
 
     @Test
-    void 학습_커밋이_없으면_빈_목록을_반환한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
+    void README_인코딩이_base64가_아니면_잘못된_GitHub_응답이다() {
+        assertInvalidReadme(new GitHubContentResponse(
+                "README.md",
+                "til/2026-09/README.md",
+                "file",
+                "content",
+                "utf-8"
+        ));
+    }
 
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
-        );
-
-        givenMonthlyCommits(
-                month,
-                List.of()
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.items())
-                .isEmpty();
-
-        verify(
-                gitHubApiClient,
-                never()
-        ).getContent(
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString()
-        );
+    @Test
+    void README의_base64_내용이_잘못되면_잘못된_GitHub_응답이다() {
+        assertInvalidReadme(new GitHubContentResponse(
+                "README.md",
+                "til/2026-09/README.md",
+                "file",
+                "A",
+                "base64"
+        ));
     }
 
     @Test
     void 다른_사용자의_저장소는_점검할_수_없다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
+        given(userRepository.findById(USER_ID))
+                .willReturn(Optional.of(user));
+        given(connectedRepositoryRepository.findByIdAndUser(
+                CONNECTED_REPOSITORY_ID,
+                user
+        )).willReturn(Optional.empty());
 
-        given(userRepository.findById(userId))
-                .willReturn(
-                        Optional.of(user)
-                );
-
-        given(
-                connectedRepositoryRepository.findByIdAndUser(
-                        connectedRepositoryId,
-                        user
-                )
-        ).willReturn(
-                Optional.empty()
-        );
-
-        assertThatThrownBy(
-                () -> recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        YearMonth.of(2026, 9)
-                )
-        )
+        assertThatThrownBy(() -> check(SEPTEMBER))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
-                        exception -> {
-                            assertThat(exception.getErrorCode())
-                                    .isEqualTo(RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND);
-                            assertThat(exception.getErrorCode().getHttpStatus().value())
-                                    .isEqualTo(404);
-                        }
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(
+                                        RepositoryErrorCode.CONNECTED_REPOSITORY_NOT_FOUND
+                                )
                 );
     }
 
     @Test
     void 점검할_월이_없으면_예외가_발생한다() {
-        assertThatThrownBy(
-                () -> recordCheckService.check(
-                        1L,
-                        10L,
-                        null
-                )
-        )
+        assertThatThrownBy(() -> check(null))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
-                        exception -> {
-                            assertThat(exception.getErrorCode())
-                                    .isEqualTo(RecordCheckErrorCode.MONTH_REQUIRED);
-                            assertThat(exception.getErrorCode().getHttpStatus().value())
-                                    .isEqualTo(400);
-                        }
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(RecordCheckErrorCode.MONTH_REQUIRED)
                 );
     }
 
-    @Test
-    void README_인코딩이_base64가_아니면_잘못된_GitHub_응답으로_처리한다() {
-        assertInvalidReadmeContent(
-                new GitHubContentResponse(
-                        "README.md",
-                        "til/2026-09/README.md",
-                        "file",
-                        "content",
-                        "utf-8"
-                )
+    private RecordCheckResponse check(YearMonth month) {
+        return recordCheckService.check(
+                USER_ID,
+                CONNECTED_REPOSITORY_ID,
+                month
         );
     }
 
-    @Test
-    void README의_base64_내용이_잘못되면_잘못된_GitHub_응답으로_처리한다() {
-        assertInvalidReadmeContent(
-                new GitHubContentResponse(
-                        "README.md",
-                        "til/2026-09/README.md",
-                        "file",
-                        "A",
-                        "base64"
-                )
-        );
-    }
-
-    @Test
-    void 실제_커밋_시각보다_커밋_메시지의_학습_날짜를_우선한다() {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 8);
-
-        LocalDate learningDate =
-                LocalDate.of(2026, 8, 31);
-
-        GitHubCommitResponse commit =
-                commit(
-                        "study(springboot): 2026-08-31 MSA 사용자 정보와 게시판 조회 실습",
-                        LocalDate.of(2026, 9, 1)
-                                .atTime(15, 0)
-                                .atZone(KST)
-                                .toInstant()
-                );
-
-        givenRepositoryContext(
-                userId,
-                connectedRepositoryId
-        );
-
-        givenMonthlyCommits(
-                month,
-                List.of(commit)
-        );
-
-        givenMonthlyReadme(
-                month,
-                Optional.empty()
-        );
-
-        givenTilFile(
-                learningDate,
-                Optional.empty()
-        );
-
-        RecordCheckResponse response =
-                recordCheckService.check(
-                        userId,
-                        connectedRepositoryId,
-                        month
-                );
-
-        assertThat(response.items())
-                .hasSize(1);
-
-        assertThat(response.items().get(0).date())
-                .isEqualTo(learningDate);
-    }
-
-    private void givenRepositoryContext(
-            Long userId,
-            Long connectedRepositoryId
-    ) {
-        given(userRepository.findById(userId))
-                .willReturn(
-                        Optional.of(user)
-                );
-
-        given(
-                connectedRepositoryRepository.findByIdAndUser(
-                        connectedRepositoryId,
-                        user
-                )
-        ).willReturn(
-                Optional.of(repository)
-        );
-
-        given(user.getGithubAccessToken())
-                .willReturn(
-                        "github-access-token"
-                );
-
+    private void givenRepositoryContext() {
+        given(userRepository.findById(USER_ID))
+                .willReturn(Optional.of(user));
+        given(connectedRepositoryRepository.findByIdAndUser(
+                CONNECTED_REPOSITORY_ID,
+                user
+        )).willReturn(Optional.of(repository));
+        given(user.getGithubAccessToken()).willReturn("github-access-token");
         given(repository.getFullName())
-                .willReturn(
-                        "dPdms21/programmers-devcourse-be11"
-                );
-
-        given(repository.getDefaultBranch())
-                .willReturn(
-                        "main"
-                );
+                .willReturn("dPdms21/programmers-devcourse-be11");
+        given(repository.getDefaultBranch()).willReturn("main");
     }
 
     private void givenMonthlyCommits(
             YearMonth month,
             List<GitHubCommitResponse> commits
     ) {
-        Instant since =
-                month.atDay(1)
-                        .minusDays(7)
-                        .atTime(DAY_BOUNDARY)
-                        .atZone(KST)
-                        .toInstant();
-
-        Instant until =
-                month.plusMonths(1)
-                        .atDay(1)
-                        .plusDays(7)
-                        .atTime(DAY_BOUNDARY)
-                        .atZone(KST)
-                        .toInstant();
-
-        given(
-                gitHubApiClient.getCommits(
-                        "github-access-token",
-                        "dPdms21",
-                        "programmers-devcourse-be11",
-                        "main",
-                        since,
-                        until
-                )
-        ).willReturn(commits);
+        Instant since = month.atDay(1)
+                .minusDays(7)
+                .atTime(DAY_BOUNDARY)
+                .atZone(KST)
+                .toInstant();
+        Instant until = month.plusMonths(1)
+                .atDay(1)
+                .plusDays(7)
+                .atTime(DAY_BOUNDARY)
+                .atZone(KST)
+                .toInstant();
+        given(gitHubApiClient.getCommits(
+                "github-access-token",
+                "dPdms21",
+                "programmers-devcourse-be11",
+                "main",
+                since,
+                until
+        )).willReturn(commits);
     }
 
     private void givenMonthlyReadme(
             YearMonth month,
             Optional<GitHubContentResponse> response
     ) {
-        String path =
-                "til/" + month + "/README.md";
+        given(gitHubApiClient.getContent(
+                "github-access-token",
+                "dPdms21",
+                "programmers-devcourse-be11",
+                "main",
+                "til/" + month + "/README.md"
+        )).willReturn(response);
+    }
 
-        given(
-                gitHubApiClient.getContent(
-                        "github-access-token",
-                        "dPdms21",
-                        "programmers-devcourse-be11",
-                        "main",
-                        path
-                )
-        ).willReturn(response);
+    private void givenMonthlyDirectory(
+            YearMonth month,
+            Optional<List<GitHubContentResponse>> response
+    ) {
+        given(gitHubApiClient.getDirectoryContents(
+                "github-access-token",
+                "dPdms21",
+                "programmers-devcourse-be11",
+                "main",
+                "til/" + month
+        )).willReturn(response);
     }
 
     private void givenTilFile(
-            LocalDate targetDate,
+            LocalDate date,
             Optional<GitHubContentResponse> response
     ) {
-        String path =
-                "til/"
-                        + YearMonth.from(targetDate)
-                        + "/"
-                        + targetDate
-                        + ".md";
+        given(gitHubApiClient.getContent(
+                "github-access-token",
+                "dPdms21",
+                "programmers-devcourse-be11",
+                "main",
+                "til/" + YearMonth.from(date) + "/" + date + ".md"
+        )).willReturn(response);
+    }
 
-        given(
-                gitHubApiClient.getContent(
-                        "github-access-token",
-                        "dPdms21",
-                        "programmers-devcourse-be11",
-                        "main",
-                        path
-                )
-        ).willReturn(response);
+    private Optional<GitHubContentResponse> readme(Set<LocalDate> dates) {
+        String content = dates.stream()
+                .sorted()
+                .map(date -> "[" + date + "](./" + date + ".md)")
+                .reduce("", (left, right) -> left + right + "\n");
+        return Optional.of(new GitHubContentResponse(
+                "README.md",
+                "til/2026-09/README.md",
+                "file",
+                Base64.getEncoder().encodeToString(
+                        content.getBytes(StandardCharsets.UTF_8)
+                ),
+                "base64"
+        ));
+    }
+
+    private GitHubContentResponse tilEntry(LocalDate date) {
+        return entry(
+                date + ".md",
+                "til/" + YearMonth.from(date) + "/" + date + ".md",
+                "file"
+        );
+    }
+
+    private GitHubContentResponse entry(
+            String name,
+            String path,
+            String type
+    ) {
+        return new GitHubContentResponse(name, path, type, null, null);
+    }
+
+    private GitHubCommitResponse commit(
+            String message,
+            LocalDate date
+    ) {
+        return commit(
+                message,
+                date.atTime(15, 0).atZone(KST).toInstant()
+        );
     }
 
     private GitHubCommitResponse commit(
@@ -690,58 +568,65 @@ class RecordCheckServiceTest {
                         "tester@example.com",
                         committedAt
                 );
-
-        GitHubCommitResponse.CommitInfo commitInfo =
+        return new GitHubCommitResponse(
+                "commit-sha",
+                "https://github.com/example/commit",
                 new GitHubCommitResponse.CommitInfo(
                         message,
                         committer,
                         committer
-                );
-
-        return new GitHubCommitResponse(
-                "commit-sha",
-                "https://github.com/example/commit",
-                commitInfo
+                )
         );
     }
 
-    private String encode(
-            String content
-    ) {
-        return Base64.getEncoder()
-                .encodeToString(
-                        content.getBytes(
-                                StandardCharsets.UTF_8
-                        )
-                );
+    private void verifyDirectoryOnce(YearMonth month) {
+        verify(gitHubApiClient, times(1)).getDirectoryContents(
+                "github-access-token",
+                "dPdms21",
+                "programmers-devcourse-be11",
+                "main",
+                "til/" + month
+        );
     }
 
-    private void assertInvalidReadmeContent(
-            GitHubContentResponse content
-    ) {
-        Long userId = 1L;
-        Long connectedRepositoryId = 10L;
-        YearMonth month = YearMonth.of(2026, 9);
-        LocalDate targetDate = LocalDate.of(2026, 9, 10);
-
-        givenRepositoryContext(userId, connectedRepositoryId);
-        givenMonthlyCommits(
-                month,
-                List.of(commit(
-                        "study(java): 2026-09-10 외부 응답 검증",
-                        targetDate.atTime(15, 0).atZone(KST).toInstant()
-                ))
+    private void verifyNoPerFileTilLookup() {
+        verify(gitHubApiClient, never()).getContent(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                argThat(path -> path != null
+                        && path.matches("til/\\d{4}-\\d{2}/\\d{4}-\\d{2}-\\d{2}\\.md"))
         );
-        givenMonthlyReadme(month, Optional.of(content));
+    }
 
-        assertThatThrownBy(() -> recordCheckService.check(
-                userId,
-                connectedRepositoryId,
-                month
-        )).isInstanceOfSatisfying(
-                ExternalSystemException.class,
-                exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(GitHubErrorCode.INVALID_RESPONSE)
+    private void verifyPerFileTilLookups(int count) {
+        verify(gitHubApiClient, times(count)).getContent(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                argThat(path -> path != null
+                        && path.matches("til/\\d{4}-\\d{2}/\\d{4}-\\d{2}-\\d{2}\\.md"))
+        );
+    }
+
+    private void assertInvalidReadme(GitHubContentResponse content) {
+        LocalDate date = LocalDate.of(2026, 9, 10);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("study(java): 2026-09-10", date)
+        ));
+        givenMonthlyReadme(SEPTEMBER, Optional.of(content));
+
+        assertThatThrownBy(() -> check(SEPTEMBER))
+                .isInstanceOfSatisfying(
+                        ExternalSystemException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(GitHubErrorCode.INVALID_RESPONSE)
+                );
+        verify(gitHubApiClient, never()).getDirectoryContents(
+                anyString(), anyString(), anyString(), anyString(), anyString()
         );
     }
 }
