@@ -6,6 +6,7 @@ import com.repoary.backend.github.client.GitHubApiClient;
 import com.repoary.backend.github.dto.GitHubCommitResponse;
 import com.repoary.backend.github.dto.GitHubContentResponse;
 import com.repoary.backend.github.exception.GitHubErrorCode;
+import com.repoary.backend.recordcheck.dto.RecordCheckItemResponse;
 import com.repoary.backend.recordcheck.dto.RecordCheckResponse;
 import com.repoary.backend.recordcheck.exception.RecordCheckErrorCode;
 import com.repoary.backend.repository.domain.ConnectedRepository;
@@ -342,6 +343,104 @@ class RecordCheckServiceTest {
     }
 
     @Test
+    void README_프로젝트_목록_관리_커밋은_7월_26일_학습일을_만들지_않는다() {
+        YearMonth july = YearMonth.of(2026, 7);
+        GitHubCommitResponse readmeCommit = commit(
+                "docs(readme): 프로젝트 목록 추가",
+                LocalDate.of(2026, 7, 27)
+                        .atTime(1, 4, 43)
+                        .atZone(KST)
+                        .toInstant()
+        );
+        givenRepositoryContext();
+        givenMonthlyCommits(july, List.of(readmeCommit));
+
+        assertThat(check(july).items()).isEmpty();
+        verify(gitHubApiClient, never()).getContent(
+                anyString(), anyString(), anyString(), anyString(), anyString()
+        );
+        verify(gitHubApiClient, never()).getDirectoryContents(
+                anyString(), anyString(), anyString(), anyString(), anyString()
+        );
+    }
+
+    @Test
+    void README_관리_커밋과_같은_날의_study_커밋은_학습일로_유지한다() {
+        YearMonth july = YearMonth.of(2026, 7);
+        LocalDate learningDate = LocalDate.of(2026, 7, 27);
+        givenRepositoryContext();
+        givenMonthlyCommits(july, List.of(
+                commit(
+                        "docs(readme): 프로젝트 목록 추가",
+                        learningDate.atTime(1, 4, 43)
+                                .atZone(KST)
+                                .toInstant()
+                ),
+                commit(
+                        "study(springboot): 2026-07-27 HTTP Basic 인증 실습",
+                        learningDate
+                )
+        ));
+        givenMonthlyReadme(july, readme(Set.of()));
+        givenMonthlyDirectory(july, Optional.of(List.of()));
+
+        assertThat(check(july).items())
+                .extracting(RecordCheckItemResponse::date)
+                .containsExactly(learningDate);
+    }
+
+    @Test
+    void assignments_lectures_practice_문서_커밋은_학습일로_포함한다() {
+        LocalDate assignmentsDate = LocalDate.of(2026, 9, 8);
+        LocalDate lecturesDate = LocalDate.of(2026, 9, 21);
+        LocalDate practiceDate = LocalDate.of(2026, 9, 22);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit(
+                        "docs(assignments): Kotlin 회원 관리 과제 문서 정리",
+                        assignmentsDate
+                ),
+                commit(
+                        "docs(lectures): 2026-09-21 네트워크와 Docker 기초 내용 정리",
+                        lecturesDate
+                ),
+                commit(
+                        "docs(practice): MSA 아키텍처 시각화 자료 추가",
+                        practiceDate
+                )
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
+
+        assertThat(check(SEPTEMBER).items())
+                .extracting(RecordCheckItemResponse::date)
+                .containsExactly(
+                        assignmentsDate,
+                        lecturesDate,
+                        practiceDate
+                );
+    }
+
+    @Test
+    void refactor_style_chore_커밋은_학습일로_포함한다() {
+        LocalDate refactorDate = LocalDate.of(2026, 9, 1);
+        LocalDate styleDate = LocalDate.of(2026, 9, 2);
+        LocalDate choreDate = LocalDate.of(2026, 9, 3);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit("refactor(springboot): DTO 구조 개선", refactorDate),
+                commit("style(springboot): 화면 스타일 개선", styleDate),
+                commit("chore(project): 실습 프로젝트 초기 설정", choreDate)
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
+
+        assertThat(check(SEPTEMBER).items())
+                .extracting(RecordCheckItemResponse::date)
+                .containsExactly(refactorDate, styleDate, choreDate);
+    }
+
+    @Test
     void 새벽_6시_이전_커밋은_전날_학습으로_처리한다() {
         LocalDate learningDate = LocalDate.of(2026, 9, 9);
         GitHubCommitResponse commit = commit(
@@ -358,6 +457,33 @@ class RecordCheckServiceTest {
 
         assertThat(check(SEPTEMBER).items().get(0).date())
                 .isEqualTo(learningDate);
+    }
+
+    @Test
+    void 오전_5시_59분은_전날이고_6시는_당일로_처리한다() {
+        LocalDate septemberNinth = LocalDate.of(2026, 9, 9);
+        LocalDate septemberTenth = LocalDate.of(2026, 9, 10);
+        givenRepositoryContext();
+        givenMonthlyCommits(SEPTEMBER, List.of(
+                commit(
+                        "study(kotlin): 날짜 경계 이전",
+                        septemberTenth.atTime(5, 59)
+                                .atZone(KST)
+                                .toInstant()
+                ),
+                commit(
+                        "study(kotlin): 날짜 경계",
+                        septemberTenth.atTime(6, 0)
+                                .atZone(KST)
+                                .toInstant()
+                )
+        ));
+        givenMonthlyReadme(SEPTEMBER, readme(Set.of()));
+        givenMonthlyDirectory(SEPTEMBER, Optional.of(List.of()));
+
+        assertThat(check(SEPTEMBER).items())
+                .extracting(RecordCheckItemResponse::date)
+                .containsExactly(septemberNinth, septemberTenth);
     }
 
     @Test

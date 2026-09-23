@@ -48,6 +48,9 @@ public class RecordCheckService {
     private static final String TIL_COMMIT_PREFIX =
             "docs(til):";
 
+    private static final String README_COMMIT_PREFIX =
+            "docs(readme):";
+
     private static final Pattern COMMIT_DATE_PATTERN =
             Pattern.compile("\\b(\\d{4}-\\d{2}-\\d{2})\\b");
 
@@ -187,9 +190,10 @@ public class RecordCheckService {
             return false;
         }
 
-        return !message
-                .trim()
-                .startsWith(TIL_COMMIT_PREFIX);
+        String trimmedMessage = message.trim();
+
+        return !trimmedMessage.startsWith(TIL_COMMIT_PREFIX)
+                && !trimmedMessage.startsWith(README_COMMIT_PREFIX);
     }
 
     private LocalDate getLearningDate(
