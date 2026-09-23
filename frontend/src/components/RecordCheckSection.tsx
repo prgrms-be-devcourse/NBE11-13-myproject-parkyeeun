@@ -28,6 +28,7 @@ function RecordCheckResults({
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [requestVersion, setRequestVersion] = useState(0);
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,9 +91,29 @@ function RecordCheckResults({
     );
   }
 
-  const allComplete = result.items.length > 0 && result.items.every(
+  const completeCount = result.items.filter(
     (item) => item.tilExists && item.readmeEntryExists,
-  );
+  ).length;
+  const needsAttentionCount = result.items.length - completeCount;
+  const allComplete = result.items.length > 0 && needsAttentionCount === 0;
+  const visibleItems = showMissingOnly
+    ? result.items.filter(
+        (item) => !(item.tilExists && item.readmeEntryExists),
+      )
+    : result.items;
+
+  const viewButtonClassName = (active: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      active
+        ? "bg-slate-700 text-white"
+        : "text-slate-600 hover:bg-slate-100"
+    }`;
+
+  const summaryItems = [
+    { label: "전체", count: result.items.length },
+    { label: "완료", count: completeCount },
+    { label: "확인 필요", count: needsAttentionCount },
+  ];
 
   return (
     <div className="mt-5">
@@ -109,38 +130,83 @@ function RecordCheckResults({
         </p>
       ) : (
         <>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <dl className="flex flex-wrap items-center gap-2 text-sm">
+              {summaryItems.map((summary, index) => (
+                <div key={summary.label} className="flex items-center gap-2">
+                  {index > 0 && (
+                    <span aria-hidden="true" className="text-slate-300">
+                      /
+                    </span>
+                  )}
+                  <dt className="text-slate-500">{summary.label}</dt>
+                  <dd className="font-semibold text-slate-900">
+                    {summary.count}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div
+              role="group"
+              aria-label="학습 기록 표시 범위"
+              className="inline-flex rounded-lg border border-slate-200 bg-white p-1"
+            >
+              <button
+                type="button"
+                aria-pressed={!showMissingOnly}
+                onClick={() => setShowMissingOnly(false)}
+                className={viewButtonClassName(!showMissingOnly)}
+              >
+                전체 보기
+              </button>
+              <button
+                type="button"
+                aria-pressed={showMissingOnly}
+                onClick={() => setShowMissingOnly(true)}
+                className={viewButtonClassName(showMissingOnly)}
+              >
+                누락만 보기
+              </button>
+            </div>
+          </div>
           {allComplete && (
             <p role="status" className="mt-4 rounded-lg bg-slate-100/70 px-4 py-3 text-sm font-medium text-slate-700">
               이번 달 학습 기록이 모두 정리되어 있습니다.
             </p>
           )}
-          <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50/50">
-            {result.items.map((item) => (
-              <li key={item.date} className="flex flex-wrap items-center justify-between gap-4 p-4">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <time dateTime={item.date} className="font-medium text-slate-900">{item.date}</time>
-                  <dl className="flex flex-wrap gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <dt className="text-slate-600">TIL</dt>
-                      <dd><StatusBadge complete={item.tilExists} /></dd>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <dt className="text-slate-600">README</dt>
-                      <dd><StatusBadge complete={item.readmeEntryExists} /></dd>
-                    </div>
-                  </dl>
-                </div>
-                {(!item.tilExists || !item.readmeEntryExists) && (
-                  <a
-                    href={`/repositories/${connectedRepositoryId}/analysis?${new URLSearchParams({ date: item.date })}`}
-                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    {!item.tilExists ? "TIL 작성하기" : "README 행 생성하기"}
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
+          {showMissingOnly && visibleItems.length === 0 ? (
+            <p role="status" className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+              확인 필요한 기록이 없습니다.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50/50">
+              {visibleItems.map((item) => (
+                <li key={item.date} className="flex flex-wrap items-center justify-between gap-4 p-4">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <time dateTime={item.date} className="font-medium text-slate-900">{item.date}</time>
+                    <dl className="flex flex-wrap gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <dt className="text-slate-600">TIL</dt>
+                        <dd><StatusBadge complete={item.tilExists} /></dd>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <dt className="text-slate-600">README</dt>
+                        <dd><StatusBadge complete={item.readmeEntryExists} /></dd>
+                      </div>
+                    </dl>
+                  </div>
+                  {(!item.tilExists || !item.readmeEntryExists) && (
+                    <a
+                      href={`/repositories/${connectedRepositoryId}/analysis?${new URLSearchParams({ date: item.date })}`}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      {!item.tilExists ? "TIL 작성하기" : "README 행 생성하기"}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </div>
