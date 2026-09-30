@@ -5,14 +5,19 @@ import {
   fetchAnalysisJobs,
 } from "../api/analysisApi";
 import {
+  createAiTilPreview,
   createTilDraft,
   fetchTilByDate,
   TilApiError,
+  updateTilDocument,
 } from "../api/tilApi";
+import { getAiTilErrorMessage } from "../utils/aiTilError";
+import type { AiTilPreview } from "../api/tilApi";
 import Layout from "../components/Layout";
 import ConsistencyAnalysisSection from "../components/analysis/ConsistencyAnalysisSection";
 import FileGroupList from "../components/analysis/FileGroupList";
 import ReadmeRowSection from "../components/analysis/ReadmeRowSection";
+import { MarkdownPreview } from "./TilEditorPage";
 import type {
   AnalysisJob,
   AnalysisJobStatus,
@@ -102,6 +107,13 @@ function AnalysisPage({
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState(false);
   const [creatingTil, setCreatingTil] = useState(false);
+  const [creatingAiTil, setCreatingAiTil] = useState(false);
+  const [showAiTilDialog, setShowAiTilDialog] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [aiTilError, setAiTilError] = useState("");
+  const [aiTilPreview, setAiTilPreview] =
+    useState<AiTilPreview | null>(null);
+  const [savingAiTil, setSavingAiTil] = useState(false);
   const [existingTil, setExistingTil] =
     useState<TilDocument | null>(null);
   const [tilLookupKey, setTilLookupKey] = useState("");
@@ -217,6 +229,59 @@ function AnalysisPage({
     }
   };
 
+  const closeAiTilDialog = () => {
+    if (creatingAiTil) {
+      return;
+    }
+
+    setShowAiTilDialog(false);
+    setGeminiApiKey("");
+    setAiTilError("");
+  };
+
+  const handleCreateAiTilPreview = async () => {
+    if (!analysisJob || creatingAiTil) {
+      return;
+    }
+
+    const apiKey = geminiApiKey.trim();
+    if (!apiKey) {
+      setAiTilError("Gemini API 키를 입력해 주세요.");
+      return;
+    }
+
+    setCreatingAiTil(true);
+    setAiTilError("");
+
+    try {
+      const preview = await createAiTilPreview(
+        connectedRepositoryId,
+        analysisJob.targetDate,
+        apiKey,
+      );
+
+      setShowAiTilDialog(false);
+      setAiTilPreview(preview);
+    } catch (error) {
+      setAiTilError(
+        getAiTilErrorMessage(
+          error instanceof TilApiError ? error.code : null,
+        ),
+      );
+    } finally {
+      setGeminiApiKey("");
+      setCreatingAiTil(false);
+    }
+  };
+
+  useEffect(() => {
+    setShowAiTilDialog(false);
+    setGeminiApiKey("");
+    setAiTilError("");
+    setAiTilPreview(null);
+    setSavingAiTil(false);
+  }, [connectedRepositoryId, targetDate]);
+
   useEffect(() => {
     void loadLatestAnalysis(targetDate);
   }, [loadLatestAnalysis, targetDate]);
@@ -324,6 +389,65 @@ function AnalysisPage({
       : "loading";
   const currentExistingTil =
     currentTilLookupStatus === "ready" ? existingTil : null;
+
+  const closeAiTilPreview = () => {
+    if (savingAiTil) {
+      return;
+    }
+
+    setAiTilPreview(null);
+    setAiTilError("");
+  };
+
+  const handleSaveAiTilPreview = async () => {
+    if (!analysisJob || !aiTilPreview || savingAiTil) {
+      return;
+    }
+
+    setSavingAiTil(true);
+    setAiTilError("");
+
+    try {
+      let tilDocument = currentExistingTil;
+
+      if (!tilDocument) {
+        try {
+          tilDocument = await createTilDraft(
+            connectedRepositoryId,
+            analysisJob.targetDate,
+          );
+        } catch (error) {
+          if (!(error instanceof TilApiError) || error.status !== 409) {
+            throw error;
+          }
+
+          tilDocument = await fetchTilByDate(
+            connectedRepositoryId,
+            analysisJob.targetDate,
+          );
+        }
+
+        setExistingTil(tilDocument);
+        setTilLookupStatus("ready");
+      }
+
+      const updatedDocument = await updateTilDocument(
+        connectedRepositoryId,
+        tilDocument.id,
+        aiTilPreview.content,
+      );
+
+      moveToTilEditor(updatedDocument.id);
+    } catch (error) {
+      setAiTilError(
+        error instanceof Error
+          ? error.message
+          : "AI TIL 초안을 저장하는 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setSavingAiTil(false);
+    }
+  };
 
   const handleTilAction = () => {
     if (currentExistingTil) {
@@ -461,6 +585,162 @@ function AnalysisPage({
             </div>
           )}
 
+          {showAiTilDialog && analysisJob && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ai-til-dialog-title"
+            >
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleCreateAiTilPreview();
+                }}
+                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+              >
+                <h3
+                  id="ai-til-dialog-title"
+                  className="text-lg font-semibold text-slate-900"
+                >
+                  AI로 TIL 초안 생성
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Gemini API Key는 저장되지 않고 이번 요청에만 사용됩니다.
+                </p>
+
+                <label
+                  htmlFor="gemini-api-key"
+                  className="mt-5 block text-sm font-medium text-slate-800"
+                >
+                  Gemini API Key
+                </label>
+                <input
+                  id="gemini-api-key"
+                  name="gemini-api-key"
+                  type="password"
+                  autoComplete="new-password"
+                  value={geminiApiKey}
+                  onChange={(event) => {
+                    setGeminiApiKey(event.target.value);
+                    setAiTilError("");
+                  }}
+                  disabled={creatingAiTil}
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 disabled:bg-slate-100"
+                  placeholder="Gemini API Key 입력"
+                  autoFocus
+                />
+
+                <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                  <p>
+                    AI 생성을 위해 해당 날짜의 GitHub 변경 내용이 Gemini로
+                    전송될 수 있습니다.
+                  </p>
+                  <p className="mt-1">
+                    비공개 저장소라면 코드 diff가 외부 AI 서비스로 전달될 수
+                    있습니다.
+                  </p>
+                  <p className="mt-1">
+                    AI를 사용하지 않아도 기존 TIL 초안 생성 기능은 그대로 사용할
+                    수 있습니다.
+                  </p>
+                </div>
+
+                {aiTilError && (
+                  <p
+                    role="alert"
+                    className="mt-4 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+                  >
+                    {aiTilError}
+                  </p>
+                )}
+
+                <div className="mt-6 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeAiTilDialog}
+                    disabled={creatingAiTil}
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingAiTil}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creatingAiTil ? "AI 생성 중..." : "AI로 생성"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {aiTilPreview && analysisJob && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ai-til-preview-title"
+            >
+              <div className="flex max-h-full w-full max-w-3xl flex-col rounded-2xl bg-white p-6 shadow-xl">
+                <div>
+                  <h3
+                    id="ai-til-preview-title"
+                    className="text-lg font-semibold text-slate-900"
+                  >
+                    AI TIL 초안 미리보기
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {aiTilPreview.title}
+                  </p>
+                </div>
+
+                <div className="mt-5 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/40 p-5">
+                  <MarkdownPreview content={aiTilPreview.content} />
+                </div>
+
+                <p className="mt-4 text-sm text-slate-600">
+                  {currentExistingTil
+                    ? "현재 TIL 내용이 AI 초안으로 교체됩니다. 적용 전 내용을 확인하세요."
+                    : "확인 후 새 TIL 초안으로 저장됩니다."}
+                </p>
+
+                {aiTilError && (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+                  >
+                    {aiTilError}
+                  </p>
+                )}
+
+                <div className="mt-6 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeAiTilPreview}
+                    disabled={savingAiTil}
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveAiTilPreview()}
+                    disabled={savingAiTil}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingAiTil
+                      ? "저장 중..."
+                      : currentExistingTil
+                        ? "현재 TIL에 적용"
+                        : "이 내용으로 TIL 생성"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <p className="mt-8 text-sm text-slate-500">
               분석 결과를 불러오는 중입니다.
@@ -551,25 +831,47 @@ function AnalysisPage({
                         targetDate={analysisJob.targetDate}
                         canGenerate={!!currentExistingTil && !executing}
                         tilAction={
-                          <button
-                            type="button"
-                            onClick={handleTilAction}
-                            disabled={
-                              creatingTil ||
-                              currentTilLookupStatus !== "ready"
-                            }
-                            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {creatingTil
-                              ? "TIL 생성 중..."
-                              : currentTilLookupStatus === "loading"
-                                ? "TIL 확인 중..."
-                                : currentTilLookupStatus === "error"
-                                  ? "TIL 확인 실패"
-                                  : currentExistingTil
-                                    ? "TIL 확인하기"
-                                    : "TIL 초안 만들기"}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleTilAction}
+                              disabled={
+                                creatingTil ||
+                                creatingAiTil ||
+                                currentTilLookupStatus !== "ready"
+                              }
+                              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {creatingTil
+                                ? "TIL 생성 중..."
+                                : currentTilLookupStatus === "loading"
+                                  ? "TIL 확인 중..."
+                                  : currentTilLookupStatus === "error"
+                                    ? "TIL 확인 실패"
+                                    : currentExistingTil
+                                      ? "TIL 확인하기"
+                                      : "TIL 초안 만들기"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAiTilError("");
+                                setGeminiApiKey("");
+                                setAiTilPreview(null);
+                                setShowAiTilDialog(true);
+                              }}
+                              disabled={
+                                creatingTil ||
+                                creatingAiTil ||
+                                currentTilLookupStatus !== "ready"
+                              }
+                              className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {creatingAiTil
+                                ? "AI 생성 중..."
+                                : "AI로 초안 생성"}
+                            </button>
+                          </>
                         }
                         unavailableMessage={
                           executing

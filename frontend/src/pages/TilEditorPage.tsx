@@ -95,7 +95,7 @@ const renderParagraphLines = (
     ...renderInlineMarkdown(line, `${keyPrefix}-${index}`),
   ]);
 
-const MarkdownPreview = ({ content }: { content: string }) => {
+export const MarkdownPreview = ({ content }: { content: string }) => {
   if (!content.trim()) {
     return (
       <p className="text-sm text-slate-400">
