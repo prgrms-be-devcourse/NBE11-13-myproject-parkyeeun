@@ -27,6 +27,7 @@ public class CommitAnalysisService {
 
     private final GitHubCommitService gitHubCommitService;
     private final RepositoryRuleMatcher repositoryRuleMatcher;
+    private final ConventionalCommitParser conventionalCommitParser;
     private final UserRepository userRepository;
     private final ConnectedRepositoryRepository connectedRepositoryRepository;
     private final ClassificationRuleRepository classificationRuleRepository;
@@ -35,6 +36,7 @@ public class CommitAnalysisService {
     public CommitAnalysisService(
             GitHubCommitService gitHubCommitService,
             RepositoryRuleMatcher repositoryRuleMatcher,
+            ConventionalCommitParser conventionalCommitParser,
             UserRepository userRepository,
             ConnectedRepositoryRepository connectedRepositoryRepository,
             ClassificationRuleRepository classificationRuleRepository,
@@ -42,6 +44,7 @@ public class CommitAnalysisService {
     ) {
         this.gitHubCommitService = gitHubCommitService;
         this.repositoryRuleMatcher = repositoryRuleMatcher;
+        this.conventionalCommitParser = conventionalCommitParser;
         this.userRepository = userRepository;
         this.connectedRepositoryRepository = connectedRepositoryRepository;
         this.classificationRuleRepository = classificationRuleRepository;
@@ -109,7 +112,11 @@ public class CommitAnalysisService {
                                 commit.message(),
                                 conventionRules
                         )
-                        .orElse(null);
+                        .orElseGet(() ->
+                                createConventionalCommitFallback(
+                                        commit.message()
+                                )
+                        );
 
         List<CommitAnalysisResponse.FileAnalysis> files =
                 detail.files()
@@ -127,6 +134,26 @@ public class CommitAnalysisService {
                 commit.committedAt(),
                 convention,
                 files
+        );
+    }
+
+    private ConventionMatchResult createConventionalCommitFallback(
+            String commitMessage
+    ) {
+        ConventionalCommitParser.ParsedCommitMessage parsed =
+                conventionalCommitParser.parse(commitMessage);
+
+        if (parsed.commitType() == null) {
+            return null;
+        }
+
+        return new ConventionMatchResult(
+                null,
+                null,
+                parsed.commitType(),
+                parsed.scope(),
+                null,
+                Integer.MAX_VALUE
         );
     }
 

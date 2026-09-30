@@ -234,6 +234,52 @@ class GitHubApiClientTest {
     }
 
     @Test
+    @DisplayName("커밋 상세 응답의 patch를 역직렬화한다")
+    void commitDetailIncludesPatch() {
+        server.expect(requestTo(
+                        "https://api.github.test/repos/owner/repository/commits/abc123"
+                ))
+                .andRespond(withSuccess(
+                        """
+                                {
+                                  "sha": "abc123",
+                                  "files": [
+                                    {
+                                      "filename": "src/App.java",
+                                      "status": "modified",
+                                      "additions": 2,
+                                      "deletions": 1,
+                                      "changes": 3,
+                                      "patch": "@@ -1 +1 @@\\n-old\\n+new"
+                                    },
+                                    {
+                                      "filename": "image.png",
+                                      "status": "modified",
+                                      "additions": 0,
+                                      "deletions": 0,
+                                      "changes": 0
+                                    }
+                                  ]
+                                }
+                                """,
+                        MediaType.APPLICATION_JSON
+                ));
+
+        var detail = gitHubApiClient.getCommitDetail(
+                "token",
+                "owner",
+                "repository",
+                "abc123"
+        );
+
+        assertThat(detail.files()).hasSize(2);
+        assertThat(detail.files().get(0).patch())
+                .isEqualTo("@@ -1 +1 @@\n-old\n+new");
+        assertThat(detail.files().get(1).patch()).isNull();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("읽기 타임아웃은 GitHub TIMEOUT 오류로 분류한다")
     void readTimeoutIsClassifiedAsTimeout() {
         GitHubApiClient client = clientThatThrows(

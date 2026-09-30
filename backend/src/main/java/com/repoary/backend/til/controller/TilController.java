@@ -1,8 +1,11 @@
 package com.repoary.backend.til.controller;
 
 import com.repoary.backend.til.domain.TilDocument;
+import com.repoary.backend.til.dto.AiTilDraftRequest;
+import com.repoary.backend.til.dto.AiTilPreviewResponse;
 import com.repoary.backend.til.dto.TilDocumentResponse;
 import com.repoary.backend.til.dto.TilUpdateRequest;
+import com.repoary.backend.til.service.AiTilDraftService;
 import com.repoary.backend.til.service.TilService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,11 +27,31 @@ import java.time.LocalDate;
 public class TilController {
 
     private final TilService tilService;
+    private final AiTilDraftService aiTilDraftService;
 
     public TilController(
-            TilService tilService
+            TilService tilService,
+            AiTilDraftService aiTilDraftService
     ) {
         this.tilService = tilService;
+        this.aiTilDraftService = aiTilDraftService;
+    }
+
+    @Operation(summary = "Gemini를 사용한 TIL 초안 미리보기 생성")
+    @PostMapping("/ai-preview")
+    public AiTilPreviewResponse createAiPreview(
+            Authentication authentication,
+            @PathVariable Long connectedRepositoryId,
+            @RequestBody AiTilDraftRequest request
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+
+        return aiTilDraftService.generatePreview(
+                userId,
+                connectedRepositoryId,
+                request == null ? null : request.date(),
+                request == null ? null : request.apiKey()
+        );
     }
 
     @Operation(

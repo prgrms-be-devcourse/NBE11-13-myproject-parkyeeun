@@ -7,36 +7,42 @@ import {
 
 export class TilApiError extends Error {
   status: number;
+  code: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null) {
     super(message);
     this.name = "TilApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
-const getErrorMessage = async (
+const getErrorDetails = async (
   response: Response,
   fallbackMessage: string,
 ) => {
   try {
     const data = await response.json();
+    const code =
+      typeof data.code === "string" && data.code.trim()
+        ? data.code
+        : null;
 
     if (typeof data.message === "string" && data.message.trim()) {
-      return data.message;
+      return { message: data.message, code };
     }
 
     if (
       typeof data.errorMessage === "string" &&
       data.errorMessage.trim()
     ) {
-      return data.errorMessage;
+      return { message: data.errorMessage, code };
     }
   } catch {
     // 응답 본문이 없거나 JSON이 아닌 경우 기본 메시지를 사용한다.
   }
 
-  return fallbackMessage;
+  return { message: fallbackMessage, code: null };
 };
 
 const requestJson = async <T>(
@@ -49,9 +55,11 @@ const requestJson = async <T>(
   await handleAuthenticationFailure(response);
 
   if (!response.ok) {
+    const error = await getErrorDetails(response, fallbackMessage);
     throw new TilApiError(
-      await getErrorMessage(response, fallbackMessage),
+      error.message,
       response.status,
+      error.code,
     );
   }
 
@@ -75,6 +83,30 @@ export const createTilDraft = async (
       headers: authHeaders(),
     },
     "TIL 초안 생성에 실패했습니다.",
+  );
+};
+
+export type AiTilPreview = {
+  title: string;
+  content: string;
+};
+
+export const createAiTilPreview = async (
+  connectedRepositoryId: number,
+  targetDate: string,
+  apiKey: string,
+): Promise<AiTilPreview> => {
+  return requestJson<AiTilPreview>(
+    `${createTilBaseUrl(connectedRepositoryId)}/ai-preview`,
+    {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ date: targetDate, apiKey }),
+    },
+    "AI TIL 초안 생성에 실패했습니다.",
   );
 };
 

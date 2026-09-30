@@ -28,7 +28,9 @@ public record GitHubCommitDetailResponse(
             int changes,
 
             @JsonAlias("previous_filename")
-            String previousFilename
+            String previousFilename,
+
+            String patch
     ) {
     }
 }
