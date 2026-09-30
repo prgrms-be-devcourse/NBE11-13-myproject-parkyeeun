@@ -4,6 +4,7 @@ import com.repoary.backend.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 public enum TilErrorCode implements ErrorCode {
+    AI_SOURCE_EMPTY(HttpStatus.UNPROCESSABLE_ENTITY, "TIL_AI_SOURCE_EMPTY", "AI TIL 생성에 사용할 변경 내용이 없습니다."),
 
     DATE_REQUIRED(HttpStatus.BAD_REQUEST, "TIL_DATE_REQUIRED", "TIL 날짜는 필수입니다."),
     ALREADY_EXISTS(HttpStatus.CONFLICT, "TIL_ALREADY_EXISTS", "해당 날짜의 TIL이 이미 존재합니다."),

@@ -80,6 +80,7 @@ class CommitConsistencyServiceTest {
         commitConsistencyService = new CommitConsistencyService(
                 gitHubCommitService,
                 repositoryRuleMatcher,
+                new ConventionalCommitParser(),
                 userRepository,
                 connectedRepositoryRepository,
                 classificationRuleRepository,
@@ -892,6 +893,7 @@ class CommitConsistencyServiceTest {
                         10,
                         2,
                         12,
+                        null,
                         null
                 );
 

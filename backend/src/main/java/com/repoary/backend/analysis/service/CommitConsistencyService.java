@@ -31,20 +31,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class CommitConsistencyService {
 
-    private static final Pattern CONVENTIONAL_COMMIT_PATTERN =
-            Pattern.compile(
-                    "^([A-Za-z]+)(?:\\(([^)]+)\\))?:\\s+(.+)$"
-            );
-
     private final GitHubCommitService gitHubCommitService;
     private final RepositoryRuleMatcher repositoryRuleMatcher;
+    private final ConventionalCommitParser conventionalCommitParser;
     private final UserRepository userRepository;
     private final ConnectedRepositoryRepository connectedRepositoryRepository;
     private final ClassificationRuleRepository classificationRuleRepository;
@@ -53,6 +47,7 @@ public class CommitConsistencyService {
     public CommitConsistencyService(
             GitHubCommitService gitHubCommitService,
             RepositoryRuleMatcher repositoryRuleMatcher,
+            ConventionalCommitParser conventionalCommitParser,
             UserRepository userRepository,
             ConnectedRepositoryRepository connectedRepositoryRepository,
             ClassificationRuleRepository classificationRuleRepository,
@@ -60,6 +55,7 @@ public class CommitConsistencyService {
     ) {
         this.gitHubCommitService = gitHubCommitService;
         this.repositoryRuleMatcher = repositoryRuleMatcher;
+        this.conventionalCommitParser = conventionalCommitParser;
         this.userRepository = userRepository;
         this.connectedRepositoryRepository =
                 connectedRepositoryRepository;
@@ -365,8 +361,8 @@ public class CommitConsistencyService {
         String firstLine =
                 getFirstLine(commit.message());
 
-        ParsedCommitMessage parsedMessage =
-                parseCommitMessage(firstLine);
+        ConventionalCommitParser.ParsedCommitMessage parsedMessage =
+                conventionalCommitParser.parse(firstLine);
 
         List<String> issues = new ArrayList<>();
 
@@ -405,7 +401,7 @@ public class CommitConsistencyService {
 
     private void validateExpectedConvention(
             String firstLine,
-            ParsedCommitMessage parsedMessage,
+            ConventionalCommitParser.ParsedCommitMessage parsedMessage,
             ConventionMatchResult expectedConvention,
             List<String> issues
     ) {
@@ -459,25 +455,6 @@ public class CommitConsistencyService {
                             + "로 시작하지 않습니다."
             );
         }
-    }
-
-    private ParsedCommitMessage parseCommitMessage(
-            String firstLine
-    ) {
-        Matcher matcher =
-                CONVENTIONAL_COMMIT_PATTERN.matcher(firstLine);
-
-        if (!matcher.matches()) {
-            return new ParsedCommitMessage(
-                    null,
-                    null
-            );
-        }
-
-        return new ParsedCommitMessage(
-                matcher.group(1),
-                matcher.group(2)
-        );
     }
 
     private String getFirstLine(String message) {
@@ -571,9 +548,4 @@ public class CommitConsistencyService {
     ) {
     }
 
-    private record ParsedCommitMessage(
-            String commitType,
-            String scope
-    ) {
-    }
 }
