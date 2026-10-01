@@ -786,7 +786,7 @@ class AiTilDraftServiceTest {
     }
 
     @Test
-    @DisplayName("README 링크 추가와 실제 문서 산출물을 하나의 docs 작업으로 묶는다")
+    @DisplayName("README 링크 추가와 실제 문서 산출물을 하나의 practice 작업으로 묶는다")
     void groupAuxiliaryReadmeLinkWithDocumentationArtifact() throws Exception {
         String message = "docs(practice): AWS 배포 아키텍처 시각화 자료 추가";
         StoredAnalysisResult result = new StoredAnalysisResult(
@@ -798,7 +798,7 @@ class AiTilDraftServiceTest {
                         Instant.parse("2026-09-28T01:00:00Z"),
                         "docs",
                         "practice",
-                        List.of("docs"),
+                        List.of("practice"),
                         List.of(
                                 new StoredAnalysisResult.StoredFileAnalysis(
                                         "docs/README.md",
@@ -866,7 +866,7 @@ class AiTilDraftServiceTest {
 
         assertThat(summary)
                 .contains(
-                        "**docs**",
+                        "**practice**",
                         "* [msa] AWS 배포 아키텍처 시각화 자료 추가 "
                                 + "[🔗 aws-architecture.html](https://github.com/owner/repository/blob/main/docs/practice/msa/aws-architecture.html)"
                 )
@@ -890,7 +890,7 @@ class AiTilDraftServiceTest {
                         Instant.parse("2026-09-28T01:00:00Z"),
                         "docs",
                         "practice",
-                        List.of("docs"),
+                        List.of("practice"),
                         List.of(
                                 storedFile("docs/README.md"),
                                 storedFile("docs/practice/msa/aws-architecture.html")

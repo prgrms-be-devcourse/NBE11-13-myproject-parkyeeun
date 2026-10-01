@@ -32,7 +32,7 @@ public final class DefaultRulePreset {
                     "docs(practice):",
                     "docs",
                     "practice",
-                    "docs"
+                    "practice"
             ),
             new ConventionRulePreset(
                     "docs(til):",
